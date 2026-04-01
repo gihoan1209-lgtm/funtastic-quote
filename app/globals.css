@@ -214,9 +214,13 @@ body {
 .btn-del:hover { background: #fdf0f0; }
 
 @media print {
+  @page { margin: 1cm; size: A4; }
   .toolbar, .action-row, .btn-add-row, .btn-del, .no-print { display: none !important; }
   .quote-paper { box-shadow: none; border: none; }
   body { background: white; }
   .page { margin: 0; padding: 0; max-width: 100%; }
   .editable, .editable-inline, .note-text { background: transparent !important; }
+
+  /* 배경색 강제 인쇄 */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
