@@ -3,6 +3,33 @@ import { useState, useCallback } from 'react'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const comma = (n) => Math.round(Number(n) || 0).toLocaleString('ko-KR')
+
+function toKorean(n) {
+  const num = Math.round(Number(n) || 0)
+  if (num === 0) return '금영원정'
+  const units = ['', '만', '억', '조']
+  const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
+  const pos = ['', '십', '백', '천']
+  let result = ''
+  let remaining = num
+  let unitIdx = 0
+  while (remaining > 0) {
+    const chunk = remaining % 10000
+    if (chunk > 0) {
+      let chunkStr = ''
+      let c = chunk
+      for (let i = 0; i < 4; i++) {
+        const d = c % 10
+        if (d > 0) chunkStr = (d === 1 && i > 0 ? '' : digits[d]) + pos[i] + chunkStr
+        c = Math.floor(c / 10)
+      }
+      result = chunkStr + units[unitIdx] + result
+    }
+    remaining = Math.floor(remaining / 10000)
+    unitIdx++
+  }
+  return '금' + result + '원정'
+}
 const initItems = [
   { id: 1, name: 'CABOSS 미니스텝퍼', spec: 'EA', qty: 100, price: 26800, vatIncluded: true, note: '' },
 ]
@@ -128,8 +155,10 @@ export default function QuotePage() {
           {/* 합계금액 */}
           <div className="total-box">
             <div className="total-label">합계금액<br /><span style={{ fontSize: '11px' }}>(공급가액+세액)</span></div>
-            <div className="total-amount">₩ {comma(totals.total)}</div>
-            <div className="total-text">원정</div>
+            <div style={{ flex: 1 }}>
+              <div className="total-amount">₩ {comma(totals.total)}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>{toKorean(totals.total)}</div>
+            </div>
           </div>
 
           {/* 품목 액션 */}
