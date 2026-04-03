@@ -213,6 +213,18 @@ body {
 .btn-del { color: #c0392b; border-color: #e8b4b4; }
 .btn-del:hover { background: #fdf0f0; }
 
+@media (max-width: 640px) {
+  .page { padding: 0 0.5rem 3rem; }
+  .quote-paper { padding: 1.25rem 1rem; }
+  .quote-title { font-size: 20px; letter-spacing: 0.15em; }
+  .toolbar { padding: 0 1rem; }
+  .toolbar-logo { font-size: 13px; }
+  .btn { padding: 6px 10px; font-size: 12px; }
+  .total-amount { font-size: 18px; }
+  .items-table { font-size: 11px; }
+  .items-table th, .items-table td { padding: 4px 4px; }
+}
+
 @media print {
   @page { margin: 1cm; size: A4; }
   .toolbar, .action-row, .btn-add-row, .btn-del, .no-print { display: none !important; }
