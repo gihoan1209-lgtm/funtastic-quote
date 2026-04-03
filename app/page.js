@@ -104,7 +104,7 @@ export default function QuotePage() {
           <div className="quote-title">견 적 서</div>
 
           {/* 날짜 + 수신 + 공급자 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', marginBottom: '1.25rem', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0', marginBottom: '1.25rem', border: '1px solid var(--border)' }}>
 
             {/* 왼쪽: 수신정보 */}
             <div style={{ borderRight: '1px solid var(--border)' }}>
@@ -200,6 +200,7 @@ export default function QuotePage() {
           </div>
 
           {/* 품목 테이블 */}
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="items-table">
             <thead>
               <tr>
@@ -260,6 +261,7 @@ export default function QuotePage() {
               </tr>
             </tfoot>
           </table>
+          </div>
 
           {/* 비고 */}
           <div className="notes">
