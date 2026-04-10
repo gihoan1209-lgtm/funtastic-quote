@@ -92,7 +92,7 @@ export default function QuotePage() {
   return (
     <>
       <div className="toolbar">
-        <div className="toolbar-logo">펀타스틱 견적서</div>
+        <div className="toolbar-logo">견적서</div>
         <div className="toolbar-actions">
           <button className="btn" onClick={addItem}>+ 품목 추가</button>
           <button className="btn btn-white" onClick={handlePrint}>🖨 인쇄 / PDF</button>
