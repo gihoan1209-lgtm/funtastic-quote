@@ -1,8 +1,13 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect } from 'react'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const comma = (n) => Math.round(Number(n) || 0).toLocaleString('ko-KR')
+const STORAGE_KEY = 'funtastic-quote-history'
+const formatQuoteDate = (date = new Date()) => {
+  const d = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`
+}
 
 function toKorean(n) {
   const num = Math.round(Number(n) || 0)
@@ -33,8 +38,8 @@ function toKorean(n) {
 const initItems = [
   { id: 1, name: '', spec: 'EA', qty: '', price: '', vatIncluded: false, note: '' },
 ]
-const initNotes = [
-  '본 견적서는 　　월 　　일에 진행된 발주에 대한 견적서입니다.',
+const createDefaultNotes = () => [
+  `본 견적서는 ${formatQuoteDate()}에 진행된 발주에 대한 견적서입니다.`,
   '본 견적서의 납기일정은 약 2-3주 정도 소요 됩니다.',
   '테이포프(주) 입금계좌: 035-102609-01-026 기업은행',
   '배송은 택배를 통해 발송되며, 택배사는 대한통운입니다.',
@@ -42,13 +47,31 @@ const initNotes = [
   '대량건은 단순변심으로 환불이 어려우며, 불량품에 한하여 7일 이내 교환 및 환불 가능합니다.',
 ]
 
+const resizeTextArea = (el) => {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight + 4}px`
+}
+
 export default function QuotePage() {
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
   const [recipientTitle, setRecipientTitle] = useState('대표이사 귀하')
   const [intro, setIntro] = useState('아래와 같이 납품 및 청구합니다.')
   const [items, setItems] = useState(initItems)
-  const [notes, setNotes] = useState(initNotes)
+  const [notes, setNotes] = useState(createDefaultNotes)
+  const [savedQuotes, setSavedQuotes] = useState([])
+  const [selectedQuoteId, setSelectedQuoteId] = useState('')
+
+  useLayoutEffect(() => {
+    const resizeAll = () => {
+      document.querySelectorAll('textarea[data-autosize="true"]').forEach(resizeTextArea)
+    }
+
+    resizeAll()
+    window.addEventListener('beforeprint', resizeAll)
+    return () => window.removeEventListener('beforeprint', resizeAll)
+  }, [items, notes])
 
   // 공급자 정보 (수정 가능)
   const [supplier, setSupplier] = useState({
@@ -61,6 +84,73 @@ export default function QuotePage() {
     tel: '영업팀 (070-7525-7790)',
   })
   const updateSupplier = (field, val) => setSupplier(prev => ({ ...prev, [field]: val }))
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]')
+      setSavedQuotes(Array.isArray(saved) ? saved : [])
+    } catch {
+      setSavedQuotes([])
+    }
+  }, [])
+
+  const persistQuotes = (quotes) => {
+    setSavedQuotes(quotes)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes))
+    } catch {
+      // The current quote still stays available in memory for this session.
+    }
+  }
+
+  const makeQuoteSnapshot = () => ({
+    date,
+    recipient,
+    recipientTitle,
+    intro,
+    items,
+    notes,
+    supplier,
+  })
+
+  const quoteLabel = (quote) => {
+    const firstItem = quote.items?.find(item => item.name?.trim())?.name?.trim()
+    return `${quote.recipient?.trim() || '거래처 미입력'} / ${quote.date || '날짜 없음'} / ${firstItem || '품목 미입력'}`
+  }
+
+  const saveQuote = () => {
+    const now = new Date().toISOString()
+    const id = `${Date.now()}`
+    const quote = {
+      id,
+      ...makeQuoteSnapshot(),
+      savedAt: now,
+      title: quoteLabel(makeQuoteSnapshot()),
+    }
+    const nextQuotes = [quote, ...savedQuotes]
+    persistQuotes(nextQuotes)
+    setSelectedQuoteId(id)
+  }
+
+  const loadQuote = () => {
+    const quote = savedQuotes.find(saved => saved.id === selectedQuoteId)
+    if (!quote) return
+    setDate(quote.date || today())
+    setRecipient(quote.recipient || '')
+    setRecipientTitle(quote.recipientTitle || '대표이사 귀하')
+    setIntro(quote.intro || '아래와 같이 납품 및 청구합니다.')
+    setItems(quote.items?.length ? quote.items : initItems)
+    setNotes(quote.notes?.length ? quote.notes : createDefaultNotes())
+    if (quote.supplier) setSupplier(quote.supplier)
+  }
+
+  const deleteQuote = () => {
+    if (!selectedQuoteId) return
+    const quote = savedQuotes.find(saved => saved.id === selectedQuoteId)
+    if (quote && !window.confirm(`${quote.title || quoteLabel(quote)} 저장 기록을 삭제할까요?`)) return
+    persistQuotes(savedQuotes.filter(saved => saved.id !== selectedQuoteId))
+    setSelectedQuoteId('')
+  }
 
   // 계산
   const totals = items.reduce((acc, item) => {
@@ -87,13 +177,25 @@ export default function QuotePage() {
   const addNote = () => setNotes(prev => [...prev, ''])
   const removeNote = (idx) => setNotes(prev => prev.filter((_, i) => i !== idx))
 
-  const handlePrint = () => window.print()
+  const handlePrint = () => {
+    document.querySelectorAll('textarea[data-autosize="true"]').forEach(resizeTextArea)
+    window.print()
+  }
 
   return (
     <>
       <div className="toolbar">
         <div className="toolbar-logo">견적서</div>
         <div className="toolbar-actions">
+          <button className="btn" onClick={saveQuote}>저장</button>
+          <select className="quote-select" value={selectedQuoteId} onChange={e => setSelectedQuoteId(e.target.value)}>
+            <option value="">저장된 견적서</option>
+            {savedQuotes.map(quote => (
+              <option key={quote.id} value={quote.id}>{quote.title || quoteLabel(quote)}</option>
+            ))}
+          </select>
+          <button className="btn" onClick={loadQuote} disabled={!selectedQuoteId}>불러오기</button>
+          <button className="btn" onClick={deleteQuote} disabled={!selectedQuoteId}>삭제</button>
           <button className="btn" onClick={addItem}>+ 품목 추가</button>
           <button className="btn btn-white" onClick={handlePrint}>🖨 인쇄 / PDF</button>
         </div>
@@ -223,8 +325,8 @@ export default function QuotePage() {
                   <tr key={item.id}>
                     <td className="center">{idx + 1}</td>
                     <td>
-                      <textarea className="editable" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} placeholder="품명" rows={1} style={{ resize: 'none', overflow: 'hidden', lineHeight: '1.4', minHeight: '26px' }}
-                        onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }} />
+                      <textarea className="editable item-name" data-autosize="true" value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} placeholder="품명" rows={1}
+                        onInput={e => resizeTextArea(e.currentTarget)} />
                     </td>
                     <td className="center">
                       <input className="editable" value={item.spec} onChange={e => updateItem(item.id, 'spec', e.target.value)} style={{ textAlign: 'center' }} />
@@ -268,7 +370,7 @@ export default function QuotePage() {
             {notes.map((note, idx) => (
               <div key={idx} className="note-item">
                 <span className="note-prefix">※</span>
-                <textarea className="note-text" value={note} onChange={e => updateNote(idx, e.target.value)} rows={1} />
+                <textarea className="note-text" data-autosize="true" value={note} onChange={e => updateNote(idx, e.target.value)} rows={1} onInput={e => resizeTextArea(e.currentTarget)} />
                 <button className="btn-light btn-del no-print" onClick={() => removeNote(idx)} style={{ padding: '2px 7px', fontSize: '11px' }}>✕</button>
               </div>
             ))}
