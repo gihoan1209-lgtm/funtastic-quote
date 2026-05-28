@@ -161,9 +161,14 @@ body {
 .items-table textarea.editable {
   display: block;
   resize: none;
-  overflow: hidden;
+  overflow: hidden !important;
   line-height: 1.5;
   min-height: 34px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.items-table textarea.editable::-webkit-scrollbar {
+  display: none;
 }
 .items-table .item-name {
   overflow-wrap: anywhere;
@@ -265,7 +270,7 @@ body {
   .page { margin: 0; padding: 0; max-width: 100%; }
   .editable, .editable-inline, .note-text { background: transparent !important; }
   .items-table textarea.editable, .note-text {
-    overflow: visible !important;
+    overflow: hidden !important;
     min-height: 0;
   }
 
