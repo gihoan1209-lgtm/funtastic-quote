@@ -309,7 +309,7 @@ export default function QuotePage() {
                 <th style={{ width: '36px' }}>No.</th>
                 <th>품명</th>
                 <th style={{ width: '60px' }}>규격</th>
-                <th style={{ width: '60px' }}>수량</th>
+                <th style={{ width: '76px' }}>수량</th>
                 <th style={{ width: '90px' }}>단가</th>
                 <th style={{ width: '100px' }}>공급가액</th>
                 <th style={{ width: '90px' }}>세액</th>

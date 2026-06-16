@@ -175,6 +175,17 @@ body {
   white-space: pre-wrap;
 }
 .items-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.items-table input[type="number"].editable {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  min-width: 64px;
+}
+
+.items-table input[type="number"].editable::-webkit-outer-spin-button,
+.items-table input[type="number"].editable::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .items-table .center { text-align: center; }
 .items-table tr:hover td { background: #fafaf8; }
 .items-table tfoot td { background: #fafaf8; font-weight: 600; border-top: 2px solid var(--text); }
