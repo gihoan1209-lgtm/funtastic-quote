@@ -213,3 +213,26 @@ test('old saved records without new cost fields remain readable but do not inven
   assert.equal(result.totalProfit, null)
   assert.doesNotThrow(() => calculateSaleTotals({}))
 })
+
+test('shipment and payment records are operational metadata, not margin inputs', () => {
+  const sale = {
+    items: [{ price: 1100, cost: 600, wholesalePrice: 1400, qty: 2, vatIncluded: true }],
+    includeShipping: true,
+    shippingFee: 300,
+    shippingVatIncluded: true,
+    shippingCost: 120,
+  }
+  const trackedSale = {
+    ...sale,
+    shipments: [
+      { id: 1, status: 'completed', date: '2026-10-22' },
+      { id: 2, status: 'before', date: '' },
+    ],
+    payments: [
+      { id: 1, status: 'completed', date: '2026-10-22', amount: 1500 },
+      { id: 2, status: 'before', date: '', amount: '' },
+    ],
+  }
+
+  assert.deepEqual(calculateSaleTotals(trackedSale), calculateSaleTotals(sale))
+})

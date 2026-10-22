@@ -44,11 +44,45 @@ const createItem = (id = 1, values = {}) => ({
 
 const createSaleItem = (id = 1, values = {}) => createItem(id, {
   productCode: '',
+  spec: '',
   cost: '',
   wholesalePrice: '',
   vatIncluded: true,
   ...values,
 })
+
+const createShipment = (id = 1, values = {}) => ({
+  id,
+  status: 'before',
+  date: '',
+  ...values,
+})
+
+const createPayment = (id = 1, values = {}) => ({
+  id,
+  status: 'before',
+  date: '',
+  amount: '',
+  ...values,
+})
+
+const normalizedTrackingRows = (rows, createRow) => (
+  Array.isArray(rows) && rows.length
+    ? rows.map((row, index) => createRow(row?.id ?? index + 1, row))
+    : [createRow(1)]
+)
+
+const normalizeSaleRecord = (sale = {}) => {
+  const record = sale || {}
+  return {
+    ...record,
+    items: Array.isArray(record.items) && record.items.length
+      ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
+    : [createSaleItem(1)],
+    shipments: normalizedTrackingRows(record.shipments, createShipment),
+    payments: normalizedTrackingRows(record.payments, createPayment),
+  }
+}
 
 const createDefaultNotes = (date = today()) => [
   `본 견적서는 ${formatQuoteDate(date)}에 진행된 발주에 대한 견적서입니다.`,
@@ -110,7 +144,6 @@ const createSale = () => {
     recipientTitle: '대표이사 귀하',
     status: 'draft',
     requestedDueDate: '',
-    validityDays: '30',
     includeShipping: false,
     shippingFee: '',
     shippingCost: 0,
@@ -119,6 +152,8 @@ const createSale = () => {
     quoteId: '',
     issuedAt: '',
     items: [createSaleItem(1)],
+    shipments: [createShipment(1)],
+    payments: [createPayment(1)],
   }
 }
 
@@ -162,7 +197,7 @@ export default function QuotePage() {
   const [costCatalogVisibleCount, setCostCatalogVisibleCount] = useState(COST_CATALOG_PAGE_SIZE)
   const [costCatalogDirty, setCostCatalogDirty] = useState(false)
   const [costCatalogMessage, setCostCatalogMessage] = useState('')
-  const [productSearches, setProductSearches] = useState({})
+  const [catalogSearchOpenItemId, setCatalogSearchOpenItemId] = useState('')
   const costFileInputRef = useRef(null)
 
   const [date, setDate] = useState(today())
@@ -219,7 +254,7 @@ export default function QuotePage() {
     }
     try {
       const storedSales = JSON.parse(window.localStorage.getItem(SALES_STORAGE_KEY) || '[]')
-      setSales(Array.isArray(storedSales) ? storedSales : [])
+      setSales(Array.isArray(storedSales) ? storedSales.map(normalizeSaleRecord) : [])
     } catch {
       setSales([])
     }
@@ -275,7 +310,7 @@ export default function QuotePage() {
   }
 
   const updateSaleField = (field, value) => {
-    if (['shippingFee', 'shippingCost', 'validityDays'].includes(field) && !nonNegativeInput(value)) return
+    if (['shippingFee', 'shippingCost'].includes(field) && !nonNegativeInput(value)) return
     updateSelectedSale((sale) => ({ ...sale, [field]: value }))
   }
   const updateSaleItem = (itemId, field, value) => {
@@ -304,22 +339,61 @@ export default function QuotePage() {
     ...sale,
     items: [...sale.items, createSaleItem(nextItemId(sale.items), { qty: 1 })],
   }))
+  const addSaleItemFromPrevious = () => updateSelectedSale((sale) => {
+    const previousItem = sale.items[sale.items.length - 1]
+    if (!previousItem) return sale
+    const previousValues = { ...previousItem }
+    delete previousValues.id
+    return {
+      ...sale,
+      items: [...sale.items, createSaleItem(nextItemId(sale.items), previousValues)],
+    }
+  })
   const removeSaleItem = (itemId) => updateSelectedSale((sale) => ({
     ...sale,
     items: sale.items.length === 1 ? sale.items : sale.items.filter((item) => item.id !== itemId),
   }))
 
-  const updateProductSearch = (searchKey, value) => {
-    setProductSearches((current) => ({ ...current, [searchKey]: value }))
-  }
-
-  const selectCatalogItem = (itemId, catalogItem, searchKey) => {
+  const selectCatalogItem = (itemId, catalogItem) => {
     updateSelectedSale((sale) => ({
       ...sale,
       items: sale.items.map((item) => item.id === itemId ? applyCatalogItemToSaleItem(item, catalogItem) : item),
     }))
-    setProductSearches((current) => ({ ...current, [searchKey]: '' }))
+    setCatalogSearchOpenItemId('')
   }
+
+  const updateShipment = (shipmentId, field, value) => updateSelectedSale((sale) => ({
+    ...sale,
+    shipments: normalizedTrackingRows(sale.shipments, createShipment).map((shipment) => (
+      shipment.id === shipmentId ? { ...shipment, [field]: value } : shipment
+    )),
+  }))
+  const addShipment = () => updateSelectedSale((sale) => {
+    const shipments = normalizedTrackingRows(sale.shipments, createShipment)
+    return { ...sale, shipments: [...shipments, createShipment(nextItemId(shipments))] }
+  })
+  const removeShipment = (shipmentId) => updateSelectedSale((sale) => {
+    const shipments = normalizedTrackingRows(sale.shipments, createShipment)
+    return { ...sale, shipments: shipments.length === 1 ? shipments : shipments.filter((shipment) => shipment.id !== shipmentId) }
+  })
+
+  const updatePayment = (paymentId, field, value) => {
+    if (field === 'amount' && !nonNegativeInput(value)) return
+    updateSelectedSale((sale) => ({
+      ...sale,
+      payments: normalizedTrackingRows(sale.payments, createPayment).map((payment) => (
+        payment.id === paymentId ? { ...payment, [field]: value } : payment
+      )),
+    }))
+  }
+  const addPayment = () => updateSelectedSale((sale) => {
+    const payments = normalizedTrackingRows(sale.payments, createPayment)
+    return { ...sale, payments: [...payments, createPayment(nextItemId(payments))] }
+  })
+  const removePayment = (paymentId) => updateSelectedSale((sale) => {
+    const payments = normalizedTrackingRows(sale.payments, createPayment)
+    return { ...sale, payments: payments.length === 1 ? payments : payments.filter((payment) => payment.id !== paymentId) }
+  })
 
   const openCostFilePicker = () => costFileInputRef.current?.click()
 
@@ -698,7 +772,7 @@ export default function QuotePage() {
                 <section className="form-card">
                   <h2>거래처 정보</h2>
                   <div className="form-fields two-columns">
-                    <label className="field field-wide"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} placeholder="예: 글로벌아그로" /></label>
+                    <label className="field field-wide"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
                     <label className="field"><span>담당자명</span><input value={selectedSale.contactName} onChange={(event) => updateSaleField('contactName', event.target.value)} placeholder="담당자 이름" /></label>
                     <label className="field"><span>연락처</span><input value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" /></label>
                     <label className="field"><span>영업 등록일</span><input type="date" value={selectedSale.saleDate} onChange={(event) => updateSaleField('saleDate', event.target.value)} /></label>
@@ -707,18 +781,46 @@ export default function QuotePage() {
                   </div>
                 </section>
 
-                <section className="form-card">
-                  <h2>거래 조건</h2>
-                  <div className="form-fields two-columns">
-                    <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
-                    <label className="field"><span>견적 유효기간</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.validityDays} onChange={(event) => updateSaleField('validityDays', event.target.value)} /><span>일</span></div></label>
-                    <label className="field"><span>받는 배송비 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                    <label className="field"><span>부담 배송비 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                    <div className="shipping-options field-wide">
-                      <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />받는 배송비를 견적서와 매출에 반영</label>
-                      <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />받는 배송비 VAT 포함</label>
-                    </div>
-                    <p className="margin-note field-wide">고객에게 받는 배송비와 실제 부담하는 배송비를 각각 입력하세요. 부담 배송비가 없으면 0을 입력합니다.</p>
+                <section className="form-card tracking-card">
+                  <div className="form-card-heading">
+                    <div><h2>출고 · 입금 관리</h2><p>부분 출고와 부분 입금은 행을 추가해 따로 기록하세요.</p></div>
+                  </div>
+                  <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
+                  <div className="tracking-stack">
+                    <section className="tracking-section">
+                      <div className="tracking-section-heading"><h3>출고</h3><button type="button" className="btn-light" onClick={addShipment}>+ 출고 추가</button></div>
+                      <div className="tracking-list">
+                        {selectedSale.shipments.map((shipment, index) => (
+                          <div className="tracking-row" key={shipment.id}>
+                            <strong className="tracking-row-label">출고 {index + 1}</strong>
+                            <div className="tracking-status-buttons" role="group" aria-label={`출고 ${index + 1} 상태`}>
+                              <button type="button" className={`tracking-status-button ${shipment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
+                              <button type="button" className={`tracking-status-button ${shipment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
+                            </div>
+                            <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
+                            <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="tracking-section">
+                      <div className="tracking-section-heading"><h3>입금</h3><button type="button" className="btn-light" onClick={addPayment}>+ 입금 추가</button></div>
+                      <div className="tracking-list">
+                        {selectedSale.payments.map((payment, index) => (
+                          <div className="tracking-row tracking-payment-row" key={payment.id}>
+                            <strong className="tracking-row-label">입금 {index + 1}</strong>
+                            <div className="tracking-status-buttons" role="group" aria-label={`입금 ${index + 1} 상태`}>
+                              <button type="button" className={`tracking-status-button ${payment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
+                              <button type="button" className={`tracking-status-button ${payment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
+                            </div>
+                            <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input type="number" min="0" value={payment.amount ?? ''} onChange={(event) => updatePayment(payment.id, 'amount', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                            <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
+                            <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                   </div>
                 </section>
               </div>
@@ -726,14 +828,18 @@ export default function QuotePage() {
               <section className="form-card items-card">
                 <div className="form-card-heading">
                   <div><h2>품목 및 개당 마진</h2><p>품명·옵션·수량·공급가만 견적서로 넘어가며, 원가와 이익은 내부에서만 보입니다.</p></div>
-                  <button className="btn-light" onClick={addSaleItem}>+ 품목 추가</button>
+                  <div className="form-card-actions">
+                    <button type="button" className="btn-light" onClick={addSaleItem}>+ 빈 품목 추가</button>
+                    <button type="button" className="btn-light" onClick={addSaleItemFromPrevious}>+ 위 품목과 동일하게 추가</button>
+                  </div>
                 </div>
                 <div className="sales-item-list">
                   {selectedSale.items.map((item, index) => {
                     const margin = calculateSaleItem(item)
-                    const productSearchKey = `${selectedSale.id}:${item.id}`
-                    const productQuery = productSearches[productSearchKey] || ''
-                    const productCandidates = productQuery.trim() ? searchCostCatalog(costCatalog, productQuery, 8) : []
+                    const productQuery = item.name ?? ''
+                    const catalogSuggestionsId = `catalog-suggestions-${item.id}`
+                    const isCatalogSearchOpen = catalogSearchOpenItemId === item.id && Boolean(productQuery.trim())
+                    const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 8) : []
                     return (
                       <div className="sales-item-card" key={item.id}>
                         <div className="sales-item-header">
@@ -741,24 +847,34 @@ export default function QuotePage() {
                           <button className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>품목 삭제</button>
                         </div>
                         <div className="sales-item-fields">
-                          <label className="field field-wide catalog-search-field">
-                            <span>원가표에서 품목 찾기</span>
+                          <label className="field catalog-search-field" onBlur={(event) => {
+                            if (!event.currentTarget.contains(event.relatedTarget)) setCatalogSearchOpenItemId((current) => current === item.id ? '' : current)
+                          }}>
+                            <span>품명 <em>*</em></span>
                             <div className="catalog-search-box">
-                              <input value={productQuery} onChange={(event) => updateProductSearch(productSearchKey, event.target.value)} placeholder="품목명 또는 품목코드로 검색" autoComplete="off" />
-                              {productQuery.trim() && <div className="catalog-suggestions">
+                              <input
+                                value={productQuery}
+                                onFocus={() => setCatalogSearchOpenItemId(item.id)}
+                                onKeyDown={(event) => { if (event.key === 'Escape') setCatalogSearchOpenItemId('') }}
+                                onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)}
+                                placeholder="품명 검색 또는 직접 입력"
+                                autoComplete="off"
+                                aria-autocomplete="list"
+                                aria-controls={catalogSuggestionsId}
+                                aria-expanded={Boolean(isCatalogSearchOpen)}
+                              />
+                              {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="listbox">
                                 {productCandidates.length ? productCandidates.map((catalogItem) => (
-                                  <button type="button" className="catalog-suggestion" key={catalogItem.id} onClick={() => selectCatalogItem(item.id, catalogItem, productSearchKey)}>
+                                  <button type="button" className="catalog-suggestion" role="option" aria-label={`${catalogItem.name || '품목명 미입력'} 선택`} key={catalogItem.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectCatalogItem(item.id, catalogItem)}>
                                     <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
                                     <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
                                   </button>
                                 )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
                               </div>}
                             </div>
-                            <small>선택하면 품목코드·품명·옵션·개당 원가가 복사됩니다. 공급가와 수량은 유지됩니다.</small>
                           </label>
                           <label className="field"><span>품목코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="예: 100450-0001" /></label>
-                          <label className="field"><span>품명 <em>*</em></span><input value={item.name ?? ''} onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)} placeholder="상품명" /></label>
-                          <label className="field"><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></label>
+                          <label className="field"><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션 입력" /></label>
                           <label className="field"><span>구매수량 <em>*</em></span><input type="number" min="0" value={item.qty ?? ''} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} placeholder="수량" /></label>
                           <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" /></label>
                           <label className="field"><span>도매가</span><input type="number" min="0" value={item.wholesalePrice ?? ''} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', event.target.value)} placeholder="도매가 입력" /></label>
@@ -776,6 +892,18 @@ export default function QuotePage() {
                   })}
                 </div>
                 <p className="margin-note">새 품목의 공급가는 엑셀과 같이 VAT 포함이 기본입니다. VAT 미포함을 선택하면 견적서에 부가세 10%가 추가됩니다.</p>
+                <section className="margin-shipping">
+                  <div className="margin-summary-heading"><h3>배송비 · 마진 반영</h3><span>배송비는 총순이익 계산에 바로 반영됩니다</span></div>
+                  <div className="margin-shipping-fields">
+                    <label className="field"><span>받는 배송비 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                    <label className="field"><span>부담 배송비 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                  </div>
+                  <div className="shipping-options">
+                    <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />받는 배송비를 견적서와 매출에 반영</label>
+                    <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />받는 배송비 VAT 포함</label>
+                  </div>
+                  <p className="margin-note">고객에게 받는 배송비와 실제 부담하는 배송비를 각각 입력하세요. 부담 배송비가 없으면 0을 입력합니다.</p>
+                </section>
                 <div className="margin-summary">
                   <div className="margin-summary-heading"><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
                   <div className="margin-summary-grid">

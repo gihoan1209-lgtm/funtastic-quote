@@ -125,6 +125,8 @@ test('copying to a quote cannot leak cost, wholesale price, profit, or other int
     includeShipping: true,
     shippingFee: 100,
     shippingCost: 999,
+    shipments: [{ id: 1, status: 'completed', date: '2026-10-22' }],
+    payments: [{ id: 1, status: 'completed', date: '2026-10-22', amount: 1000 }],
     privateToken: '비공개',
   })
   assert.deepEqual(quoteItems, [
