@@ -845,19 +845,30 @@ export default function QuotePage() {
                 <>
                   <div className="cost-table-wrap">
                     <table className="cost-table">
+                      <colgroup>
+                        <col className="cost-col-code" />
+                        <col className="cost-col-name" />
+                        <col className="cost-col-spec" />
+                        <col className="cost-col-yuan" />
+                        <col className="cost-col-yuan" />
+                        <col className="cost-col-work" />
+                        <col className="cost-col-work" />
+                        <col className="cost-col-applied" />
+                        <col className="cost-col-actions" />
+                      </colgroup>
                       <thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>특가 (元) · J</th><th>신규원가 (元) · K</th><th>works 기존 원가 (N)</th><th>works 신규 원가 (O)</th><th>적용 원가</th><th></th></tr></thead>
                       <tbody>
                         {visibleCostCatalog.map((item) => (
                           <tr key={item.id}>
-                            <td><input value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
-                            <td><input value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
-                            <td><input value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
-                            <td><input className="number-input" type="number" min="0" step="any" value={item.specialPriceYuan} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', event.target.value)} placeholder="-" /></td>
-                            <td><input className="number-input" type="number" min="0" step="any" value={item.newCostYuan} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', event.target.value)} placeholder="-" /></td>
-                            <td><input className="number-input" type="number" min="0" step="any" value={item.existingCost} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', event.target.value)} placeholder="-" /></td>
-                            <td><input className="number-input" type="number" min="0" step="any" value={item.newCost} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', event.target.value)} placeholder="-" /></td>
-                            <td className="amount">{money(item.cost)}</td>
-                            <td className="center"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
+                            <td data-label="품목코드"><input aria-label="품목코드" value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
+                            <td data-label="품목명"><input aria-label="품목명" value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
+                            <td data-label="규격"><input aria-label="규격" value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
+                            <td data-label="특가 (元) · J"><input aria-label="특가 위안화 J열" className="number-input" type="number" min="0" step="any" value={item.specialPriceYuan} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', event.target.value)} placeholder="-" /></td>
+                            <td data-label="신규원가 (元) · K"><input aria-label="신규원가 위안화 K열" className="number-input" type="number" min="0" step="any" value={item.newCostYuan} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', event.target.value)} placeholder="-" /></td>
+                            <td data-label="works 기존 원가 (N)"><input aria-label="works 기존 원가 N열" className="number-input" type="number" min="0" step="any" value={item.existingCost} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', event.target.value)} placeholder="-" /></td>
+                            <td data-label="works 신규 원가 (O)"><input aria-label="works 신규 원가 O열" className="number-input" type="number" min="0" step="any" value={item.newCost} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', event.target.value)} placeholder="-" /></td>
+                            <td data-label="적용 원가" className="amount cost-apply-cell">{money(item.cost)}</td>
+                            <td data-label="관리" className="center cost-delete-cell"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
                           </tr>
                         ))}
                       </tbody>

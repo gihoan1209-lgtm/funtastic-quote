@@ -718,7 +718,7 @@ body {
   white-space: nowrap;
   border: 0;
 }
-.cost-page { max-width: 1140px; margin: 0 auto; padding: 42px 24px 64px; }
+.cost-page { max-width: 1440px; margin: 0 auto; padding: 42px 24px 64px; }
 .cost-import-card {
   display: flex;
   align-items: center;
@@ -762,36 +762,44 @@ body {
   font-size: 12px;
   line-height: 1.5;
 }
-.cost-table-wrap { overflow-x: auto; }
-.cost-table { width: 100%; min-width: 1170px; border-collapse: collapse; font-size: 12px; }
+.cost-catalog-card .sales-controls { flex-wrap: wrap; }
+.cost-catalog-card .sales-search { flex: 1 1 220px; min-width: min(180px, 100%); }
+.cost-table-wrap { width: 100%; overflow: visible; }
+.cost-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
+.cost-col-code { width: 12%; }
+.cost-col-name { width: 20%; }
+.cost-col-spec { width: 11%; }
+.cost-col-yuan, .cost-col-work { width: 11%; }
+.cost-col-applied { width: 8%; }
+.cost-col-actions { width: 5%; }
 .cost-table th {
-  padding: 11px 9px;
+  padding: 9px 5px;
   color: var(--text2);
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
-  text-align: left;
+  text-align: center;
   font-size: 11px;
   font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
-.cost-table td { padding: 7px 8px; border-bottom: 1px solid #edf0ed; vertical-align: middle; }
+.cost-table td { min-width: 0; padding: 6px 4px; border-bottom: 1px solid #edf0ed; vertical-align: middle; }
 .cost-table tr:last-child td { border-bottom: 0; }
 .cost-table input {
   width: 100%;
-  min-width: 84px;
-  min-height: 34px;
-  padding: 6px 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 6px;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   outline: none;
   background: #fff;
-  font-size: 12px;
+  font-size: 11px;
 }
-.cost-table td:nth-child(1) { min-width: 120px; }
-.cost-table td:nth-child(2) { min-width: 190px; }
-.cost-table td:nth-child(3) { min-width: 130px; }
-.cost-table td:nth-child(4), .cost-table td:nth-child(5), .cost-table td:nth-child(6), .cost-table td:nth-child(7) { min-width: 116px; }
+.cost-table .number-input, .cost-table .amount { font-variant-numeric: tabular-nums; text-align: right; }
+.cost-table .amount { padding-right: 7px; color: var(--green-dark); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.cost-table .btn-del { min-width: 0; padding: 5px 7px; }
 .cost-table input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1); }
 .cost-load-more {
   display: flex;
@@ -854,4 +862,56 @@ body {
   .cost-import-card { align-items: flex-start; flex-direction: column; padding: 16px; }
   .cost-import-actions { justify-content: flex-start; }
   .catalog-suggestion { align-items: flex-start; gap: 10px; }
+}
+
+@media (max-width: 860px) {
+  .cost-table, .cost-table tbody, .cost-table tr { display: block; width: 100%; }
+  .cost-table { table-layout: auto; }
+  .cost-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .cost-table tbody { display: grid; gap: 10px; padding: 10px; }
+  .cost-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 10px;
+    padding: 12px;
+    border: 1px solid #dce7dd;
+    border-radius: 9px;
+    background: #fbfdfb;
+  }
+  .cost-table td {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .cost-table td::before {
+    content: attr(data-label);
+    color: var(--text2);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .cost-table td:nth-child(2) { grid-column: 1 / -1; }
+  .cost-table .cost-apply-cell {
+    align-content: end;
+    justify-content: end;
+    min-height: 32px;
+    padding: 7px;
+    border: 1px solid #d9e7db;
+    border-radius: 6px;
+    background: #f1f8f2;
+  }
+  .cost-table .cost-delete-cell { align-content: end; }
+  .cost-table .btn-del { width: 100%; min-height: 32px; }
 }
