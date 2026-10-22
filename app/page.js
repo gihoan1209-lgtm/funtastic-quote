@@ -1,12 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { calculateSaleItem, calculateSaleTotals } from '../lib/sales-calculations.mjs'
+import { calculateQuoteItem, calculateQuoteTotals, quoteItemsFromSale } from '../lib/quote-calculations.mjs'
 
 const QUOTE_STORAGE_KEY = 'funtastic-quote-history'
 const SALES_STORAGE_KEY = 'funtastic-sales-history'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const comma = (value) => Math.round(Number(value) || 0).toLocaleString('ko-KR')
+const money = (value) => value == null ? '—' : `₩ ${comma(value)}`
+const percent = (value) => value == null ? '—' : `${(value * 100).toFixed(1)}%`
+const nonNegativeInput = (value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0)
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const formatQuoteDate = (date = new Date()) => {
   const value = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date
@@ -26,6 +31,13 @@ const createItem = (id = 1, values = {}) => ({
   price: '',
   vatIncluded: false,
   note: '',
+  ...values,
+})
+
+const createSaleItem = (id = 1, values = {}) => createItem(id, {
+  cost: '',
+  wholesalePrice: '',
+  vatIncluded: true,
   ...values,
 })
 
@@ -60,12 +72,6 @@ const resizeTextArea = (element) => {
   element.style.height = `${element.scrollHeight + 4}px`
 }
 
-const calculateTotals = (items) => items.reduce((acc, item) => {
-  const supply = (Number(item.qty) || 0) * (Number(item.price) || 0)
-  const vat = item.vatIncluded ? 0 : Math.round(supply * 0.1)
-  return { supply: acc.supply + supply, vat: acc.vat + vat, total: acc.total + supply + vat }
-}, { supply: 0, vat: 0, total: 0 })
-
 const quoteLabel = (quote) => {
   const firstItem = quote.items?.find((item) => item.name?.trim())?.name?.trim()
   return `${quote.recipient?.trim() || '거래처 미입력'} / ${quote.date || '날짜 없음'} / ${firstItem || '품목 미입력'}`
@@ -73,29 +79,12 @@ const quoteLabel = (quote) => {
 
 const nextItemId = (items) => Math.max(...items.map((item) => Number(item.id) || 0), 0) + 1
 
-const quoteItemsFromSale = (sale) => {
-  const items = (sale.items || [])
-    .filter((item) => item.name?.trim())
-    .map((item, index) => createItem(index + 1, {
-      name: item.name,
-      spec: item.spec || 'EA',
-      qty: item.qty,
-      price: item.price,
-      vatIncluded: Boolean(item.vatIncluded),
-      note: item.note || '',
-    }))
-
-  if (sale.includeShipping && Number(sale.shippingFee) > 0) {
-    items.push(createItem(items.length + 1, {
-      name: '배송비',
-      spec: '건',
-      qty: 1,
-      price: sale.shippingFee,
-      vatIncluded: Boolean(sale.shippingVatIncluded),
-      note: '',
-    }))
-  }
-  return items
+const quoteItemsMatch = (left, right) => {
+  const normalize = (list) => (list || []).map((item) => [
+    item.name || '', item.spec || 'EA', String(item.qty ?? ''), String(item.price ?? ''),
+    Boolean(item.vatIncluded), item.note || '',
+  ])
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right))
 }
 
 const createSale = () => {
@@ -115,11 +104,12 @@ const createSale = () => {
     validityDays: '30',
     includeShipping: false,
     shippingFee: '',
-    shippingVatIncluded: false,
+    shippingCost: 0,
+    shippingVatIncluded: true,
     internalMemo: '',
     quoteId: '',
     issuedAt: '',
-    items: [createItem(1)],
+    items: [createSaleItem(1)],
   }
 }
 
@@ -171,7 +161,8 @@ export default function QuotePage() {
 
   const selectedSale = sales.find((sale) => sale.id === selectedSaleId)
   const linkedSale = sales.find((sale) => sale.id === linkedSaleId)
-  const totals = useMemo(() => calculateTotals(items), [items])
+  const totals = useMemo(() => calculateQuoteTotals(items), [items])
+  const selectedSaleTotals = selectedSale ? calculateSaleTotals(selectedSale) : null
 
   const filteredSales = useMemo(() => {
     const query = salesSearch.trim().toLocaleLowerCase('ko-KR')
@@ -213,7 +204,7 @@ export default function QuotePage() {
     try {
       window.localStorage.setItem(QUOTE_STORAGE_KEY, JSON.stringify(nextQuotes))
     } catch {
-      // Browser storage might be unavailable, but the in-memory state remains usable.
+      window.alert('브라우저 저장소에 견적서를 저장하지 못했습니다. 새로고침 전에 저장 공간과 브라우저 설정을 확인해주세요.')
     }
   }
 
@@ -222,7 +213,7 @@ export default function QuotePage() {
     try {
       window.localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(nextSales))
     } catch {
-      // Browser storage might be unavailable, but the in-memory state remains usable.
+      window.alert('브라우저 저장소에 영업건을 저장하지 못했습니다. 새로고침 전에 저장 공간과 브라우저 설정을 확인해주세요.')
     }
   }
 
@@ -233,14 +224,20 @@ export default function QuotePage() {
     )))
   }
 
-  const updateSaleField = (field, value) => updateSelectedSale((sale) => ({ ...sale, [field]: value }))
-  const updateSaleItem = (itemId, field, value) => updateSelectedSale((sale) => ({
-    ...sale,
-    items: sale.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
-  }))
+  const updateSaleField = (field, value) => {
+    if (['shippingFee', 'shippingCost', 'validityDays'].includes(field) && !nonNegativeInput(value)) return
+    updateSelectedSale((sale) => ({ ...sale, [field]: value }))
+  }
+  const updateSaleItem = (itemId, field, value) => {
+    if (['qty', 'price', 'cost', 'wholesalePrice'].includes(field) && !nonNegativeInput(value)) return
+    updateSelectedSale((sale) => ({
+      ...sale,
+      items: sale.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
+    }))
+  }
   const addSaleItem = () => updateSelectedSale((sale) => ({
     ...sale,
-    items: [...sale.items, createItem(nextItemId(sale.items), { qty: 1, price: 0 })],
+    items: [...sale.items, createSaleItem(nextItemId(sale.items), { qty: 1 })],
   }))
   const removeSaleItem = (itemId) => updateSelectedSale((sale) => ({
     ...sale,
@@ -291,14 +288,17 @@ export default function QuotePage() {
       window.alert('견적서를 만들려면 거래처명을 입력해주세요.')
       return
     }
-    if (!quoteItems.length || quoteItems.some((item) => (
-      !item.name.trim()
-      || item.qty === ''
-      || Number(item.qty) <= 0
-      || item.price === ''
-      || Number(item.price) < 0
+    if (!sale.items?.length || sale.items.some((item) => (
+      !item.name?.trim()
+      || item.qty === '' || item.qty == null || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0
+      || item.price === '' || item.price == null || !Number.isFinite(Number(item.price)) || Number(item.price) < 0
     ))) {
-      window.alert('견적서를 만들려면 품명, 수량, 단가를 확인해주세요.')
+      window.alert('견적서를 만들려면 모든 품목의 품명, 수량, 공급가를 입력하거나 빈 품목을 삭제해주세요.')
+      return
+    }
+    if (sale.includeShipping && (sale.shippingFee === '' || sale.shippingFee == null
+      || !Number.isFinite(Number(sale.shippingFee)) || Number(sale.shippingFee) < 0)) {
+      window.alert('견적서에 반영할 받는 배송비를 입력해주세요. 배송비가 없으면 0을 입력하세요.')
       return
     }
 
@@ -306,6 +306,14 @@ export default function QuotePage() {
     const existingQuote = savedQuotes.find((quote) => quote.id === sale.quoteId || quote.salesId === sale.id)
     if (existingQuote) {
       applyQuoteData(existingQuote)
+      if ((!quoteItemsMatch(existingQuote.items, quoteItems) || existingQuote.recipient !== sale.clientName
+        || existingQuote.recipientTitle !== (sale.recipientTitle || '대표이사 귀하') || existingQuote.date !== (sale.quoteDate || today()))
+        && window.confirm('저장된 견적서와 현재 영업건의 거래처, 견적일 또는 품목이 다릅니다.\n\n확인: 현재 영업건 내용으로 견적서에 다시 반영\n취소: 저장된 견적서 그대로 열기\n\n변경한 견적서는 저장 버튼을 눌러야 저장됩니다.')) {
+        setRecipient(sale.clientName)
+        setRecipientTitle(sale.recipientTitle || '대표이사 귀하')
+        setDate(sale.quoteDate || today())
+        setItems(quoteItems)
+      }
     } else {
       const quoteDate = sale.quoteDate || today()
       setDate(quoteDate)
@@ -354,9 +362,6 @@ export default function QuotePage() {
     if (linkedSaleId) {
       persistSales(sales.map((sale) => sale.id === linkedSaleId ? {
         ...sale,
-        clientName: recipient || sale.clientName,
-        recipientTitle,
-        quoteDate: date,
         quoteId: id,
         updatedAt: now,
       } : sale))
@@ -383,6 +388,7 @@ export default function QuotePage() {
 
   const updateSupplier = (field, value) => setSupplier((previous) => ({ ...previous, [field]: value }))
   const updateItem = useCallback((itemId, field, value) => {
+    if (['qty', 'price'].includes(field) && !nonNegativeInput(value)) return
     setItems((currentItems) => currentItems.map((item) => item.id === itemId ? { ...item, [field]: value } : item))
   }, [])
   const addItem = () => setItems((currentItems) => [...currentItems, createItem(nextItemId(currentItems), { qty: 1, price: 0 })])
@@ -467,11 +473,12 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th>등록일</th><th>상태</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적 합계</th><th></th></tr></thead>
+                      <thead><tr><th>등록일</th><th>상태</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적 합계</th><th>총순이익</th><th></th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
-                          const saleTotal = calculateTotals(quoteItems).total
+                          const saleTotals = calculateSaleTotals(sale)
+                          const profit = saleTotals.totalProfit
                           const firstItem = quoteItems[0]?.name || '품목 미입력'
                           const status = SALE_STATUS[sale.status] || SALE_STATUS.draft
                           return (
@@ -480,8 +487,9 @@ export default function QuotePage() {
                               <td><span className={`status-badge ${status.className}`}>{status.label}</span></td>
                               <td className="sales-client">{sale.clientName || '거래처 미입력'}</td>
                               <td>{firstItem}</td>
-                              <td>{quoteItems.length}개</td>
-                              <td className="amount">₩ {comma(saleTotal)}</td>
+                              <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
+                              <td className="amount">{money(saleTotals.totalGross)}</td>
+                              <td className={`amount ${profit != null && profit < 0 ? 'amount-negative' : ''}`}>{money(profit)}</td>
                               <td className="sales-row-action"><button className="table-link" onClick={(event) => { event.stopPropagation(); openQuoteForSale(sale) }}>{sale.quoteId ? '견적서 편집' : '견적서 작성'}</button></td>
                             </tr>
                           )
@@ -535,39 +543,66 @@ export default function QuotePage() {
                   <div className="form-fields two-columns">
                     <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                     <label className="field"><span>견적 유효기간</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.validityDays} onChange={(event) => updateSaleField('validityDays', event.target.value)} /><span>일</span></div></label>
-                    <label className="field field-wide"><span>배송비</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                    <label className="field"><span>받는 배송비 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                    <label className="field"><span>부담 배송비 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
                     <div className="shipping-options field-wide">
-                      <label className="check-label"><input type="checkbox" checked={selectedSale.includeShipping} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서에 배송비 품목으로 반영</label>
-                      <label className="check-label"><input type="checkbox" checked={selectedSale.shippingVatIncluded} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />배송비 VAT 포함</label>
+                      <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />받는 배송비를 견적서와 매출에 반영</label>
+                      <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />받는 배송비 VAT 포함</label>
                     </div>
+                    <p className="margin-note field-wide">고객에게 받는 배송비와 실제 부담하는 배송비를 각각 입력하세요. 부담 배송비가 없으면 0을 입력합니다.</p>
                   </div>
                 </section>
               </div>
 
               <section className="form-card items-card">
                 <div className="form-card-heading">
-                  <div><h2>품목</h2><p>이 목록이 견적서 품목으로 그대로 넘어갑니다.</p></div>
+                  <div><h2>품목 및 개당 마진</h2><p>품명·옵션·수량·공급가만 견적서로 넘어가며, 원가와 이익은 내부에서만 보입니다.</p></div>
                   <button className="btn-light" onClick={addSaleItem}>+ 품목 추가</button>
                 </div>
-                <div className="sales-items-wrap">
-                  <table className="sales-items-table">
-                    <thead><tr><th>품명 <em>*</em></th><th>규격</th><th>옵션 / 비고</th><th>수량 <em>*</em></th><th>단가 <em>*</em></th><th>VAT</th><th></th></tr></thead>
-                    <tbody>
-                      {selectedSale.items.map((item) => (
-                        <tr key={item.id}>
-                          <td><input value={item.name} onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)} placeholder="상품명" /></td>
-                          <td><input value={item.spec} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></td>
-                          <td><input value={item.note} onChange={(event) => updateSaleItem(item.id, 'note', event.target.value)} placeholder="옵션명 또는 비고" /></td>
-                          <td><input className="number-input" type="number" min="0" value={item.qty} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} /></td>
-                          <td><input className="number-input" type="number" min="0" value={item.price} onChange={(event) => updateSaleItem(item.id, 'price', event.target.value)} /></td>
-                          <td><label className="vat-toggle"><input type="checkbox" checked={item.vatIncluded} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />포함</label></td>
-                          <td><button className="icon-button" onClick={() => removeSaleItem(item.id)} aria-label="품목 삭제" disabled={selectedSale.items.length === 1}>×</button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="sales-item-list">
+                  {selectedSale.items.map((item, index) => {
+                    const margin = calculateSaleItem(item)
+                    return (
+                      <div className="sales-item-card" key={item.id}>
+                        <div className="sales-item-header">
+                          <span>품목 {index + 1}{item.name ? ` · ${item.name}` : ''}</span>
+                          <button className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>품목 삭제</button>
+                        </div>
+                        <div className="sales-item-fields">
+                          <label className="field"><span>품명 <em>*</em></span><input value={item.name ?? ''} onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)} placeholder="상품명" /></label>
+                          <label className="field"><span>규격</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></label>
+                          <label className="field"><span>옵션 / 비고</span><input value={item.note ?? ''} onChange={(event) => updateSaleItem(item.id, 'note', event.target.value)} placeholder="옵션명" /></label>
+                          <label className="field"><span>구매수량 <em>*</em></span><input type="number" min="0" value={item.qty ?? ''} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} placeholder="수량" /></label>
+                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" /></label>
+                          <label className="field"><span>도매가</span><input type="number" min="0" value={item.wholesalePrice ?? ''} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', event.target.value)} placeholder="도매가 입력" /></label>
+                          <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input type="number" min="0" value={item.price ?? ''} onChange={(event) => updateSaleItem(item.id, 'price', event.target.value)} placeholder="공급가 입력" /></label>
+                          <div className="field"><span>공급가 부가세</span><label className="check-label"><input type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />VAT 포함</label></div>
+                        </div>
+                        <div className="item-calc-grid">
+                          <div className="item-calc"><span>할인율</span><strong>{percent(margin.discountRate)}</strong></div>
+                          <div className="item-calc"><span>개당 매출부가세</span><strong>{money(margin.unitVat)}</strong></div>
+                          <div className="item-calc"><span>개당 순이익</span><strong className={margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}>{money(margin.unitProfit)}</strong></div>
+                          <div className="item-calc"><span>개당 순이익률</span><strong className={margin.unitProfitRate != null && margin.unitProfitRate < 0 ? 'amount-negative' : ''}>{percent(margin.unitProfitRate)}</strong></div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="sales-total-preview">견적 예상 합계 <strong>₩ {comma(calculateTotals(quoteItemsFromSale(selectedSale)).total)}</strong></div>
+                <p className="margin-note">새 품목의 공급가는 엑셀과 같이 VAT 포함이 기본입니다. VAT 미포함을 선택하면 견적서에 부가세 10%가 추가됩니다.</p>
+                <div className="margin-summary">
+                  <div className="margin-summary-heading"><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
+                  <div className="margin-summary-grid">
+                    <div className="margin-metric"><span>총구매액</span><strong>{money(selectedSaleTotals.totalGross)}</strong><small>고객이 결제할 금액</small></div>
+                    <div className="margin-metric"><span>총원가</span><strong>{money(selectedSaleTotals.totalCost)}</strong><small>원가 × 구매수량</small></div>
+                    <div className="margin-metric"><span>총매출부가세</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
+                    <div className="margin-metric"><span>받는 배송비 (+)</span><strong>{money(selectedSaleTotals.shippingGross)}</strong><small>견적서 반영 선택 시 포함</small></div>
+                    <div className="margin-metric"><span>부담 배송비 (-)</span><strong>{money(selectedSaleTotals.shippingCost)}</strong></div>
+                    <div className="margin-metric"><span>총순이익</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
+                    <div className="margin-metric"><span>총순이익률</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
+                  </div>
+                  <p className="margin-note">총순이익 = 총구매액 − 총원가 − 총매출부가세 − 부담 배송비. 받는 배송비는 총구매액에 한 번만 포함합니다. 견적 금액과 맞추기 위해 품목별 금액과 부가세를 원 단위로 반올림합니다.</p>
+                  {selectedSaleTotals.totalProfit == null && <p className="margin-warning">순이익을 계산하려면 모든 품목의 공급가·수량·원가와 부담 배송비를 0 이상으로 입력해 주세요. 받는 배송비를 반영할 때도 금액이 필요합니다. 비용이 없으면 0을 입력하세요.</p>}
+                </div>
               </section>
 
               <section className="form-card">
@@ -583,7 +618,7 @@ export default function QuotePage() {
         <main className="page">
           {linkedSale && (
             <div className="linked-sale-banner no-print">
-              <div><span>연결된 영업건</span><strong>{linkedSale.clientName || '거래처 미입력'}</strong><small>{SALE_STATUS[linkedSale.status]?.label || '작성중'}</small></div>
+              <div><span>연결된 영업건</span><strong>{linkedSale.clientName || '거래처 미입력'}</strong><small>{SALE_STATUS[linkedSale.status]?.label || '작성중'} · 견적서에서 수정한 거래처와 품목은 영업관리 정보에 자동 반영되지 않습니다.</small></div>
               <button className="btn-light" onClick={() => { setSelectedSaleId(linkedSale.id); setSalesView('edit'); setActiveTab('sales') }}>영업건 열기</button>
             </div>
           )}
@@ -636,8 +671,7 @@ export default function QuotePage() {
                 <thead><tr><th className="narrow-cell">No.</th><th>품명</th><th className="spec-cell">규격</th><th className="quantity-cell">수량</th><th className="price-cell">단가</th><th className="supply-cell">공급가액</th><th className="vat-cell">세액</th><th className="note-cell">비고</th><th className="narrow-cell no-print"></th></tr></thead>
                 <tbody>
                   {items.map((item, index) => {
-                    const supply = (Number(item.qty) || 0) * (Number(item.price) || 0)
-                    const vat = item.vatIncluded ? 0 : Math.round(supply * 0.1)
+                    const { supply, vat } = calculateQuoteItem(item)
                     return (
                       <tr key={item.id}>
                         <td className="center">{index + 1}</td>
@@ -646,7 +680,7 @@ export default function QuotePage() {
                         <td><input className="editable num" type="number" value={item.qty} onChange={(event) => updateItem(item.id, 'qty', event.target.value)} min="0" /></td>
                         <td><input className="editable num" type="number" value={item.price} onChange={(event) => updateItem(item.id, 'price', event.target.value)} min="0" /></td>
                         <td className="num">{comma(supply)}</td>
-                        <td className="center"><label className="quote-vat"><input type="checkbox" checked={item.vatIncluded} onChange={(event) => updateItem(item.id, 'vatIncluded', event.target.checked)} />{item.vatIncluded ? 'VAT포함' : comma(vat)}</label></td>
+                        <td className="center"><label className="quote-vat"><input className="no-print" type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateItem(item.id, 'vatIncluded', event.target.checked)} aria-label="단가에 VAT 포함" />{comma(vat)}</label></td>
                         <td><input className="editable" value={item.note} onChange={(event) => updateItem(item.id, 'note', event.target.value)} placeholder="" /></td>
                         <td className="center no-print"><button className="btn-light btn-del" onClick={() => removeItem(item.id)}>×</button></td>
                       </tr>
