@@ -9,6 +9,7 @@ import {
   normalizeCatalogItem,
   searchCostCatalog,
 } from '../lib/cost-catalog.mjs'
+import { createSalesListWorkbook, salesRowsForExport } from '../lib/sales-export.mjs'
 
 const QUOTE_STORAGE_KEY = 'funtastic-quote-history'
 const SALES_STORAGE_KEY = 'funtastic-sales-history'
@@ -19,8 +20,27 @@ const today = () => new Date().toISOString().slice(0, 10)
 const comma = (value) => Math.round(Number(value) || 0).toLocaleString('ko-KR')
 const money = (value) => value == null ? '—' : `₩ ${comma(value)}`
 const percent = (value) => value == null ? '—' : `${(value * 100).toFixed(1)}%`
-const nonNegativeInput = (value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0)
+const ungroupNumber = (value) => String(value ?? '').replaceAll(',', '')
+const formatGroupedNumber = (value) => {
+  const raw = ungroupNumber(value)
+  if (!raw || !/^\d+(?:\.\d*)?$/.test(raw)) return raw
+  const [integer, decimal] = raw.split('.')
+  const formattedInteger = Number(integer).toLocaleString('ko-KR')
+  return decimal === undefined ? formattedInteger : `${formattedInteger}.${decimal}`
+}
+const nonNegativeInput = (value) => {
+  const raw = ungroupNumber(value)
+  return raw === '' || (Number.isFinite(Number(raw)) && Number(raw) >= 0)
+}
+const cleanOption = (value) => String(value ?? '').trim() === 'EA' ? '' : String(value ?? '')
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+const openNativeDatePicker = (event) => {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    // Some browsers do not support showPicker; their native date control still works.
+  }
+}
 const formatQuoteDate = (date = new Date()) => {
   const value = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date
   return `${value.getMonth() + 1}월 ${value.getDate()}일`
@@ -34,12 +54,13 @@ const formatShortDate = (date) => {
 const createItem = (id = 1, values = {}) => ({
   id,
   name: '',
-  spec: 'EA',
+  spec: '',
   qty: '',
   price: '',
   vatIncluded: false,
   note: '',
   ...values,
+  spec: cleanOption(values.spec),
 })
 
 const createSaleItem = (id = 1, values = {}) => createItem(id, {
@@ -130,7 +151,7 @@ const nextItemId = (items) => Math.max(...items.map((item) => Number(item.id) ||
 
 const quoteItemsMatch = (left, right) => {
   const normalize = (list) => (list || []).map((item) => [
-    item.name || '', item.spec || 'EA', String(item.qty ?? ''), String(item.price ?? ''),
+    item.name || '', cleanOption(item.spec), String(item.qty ?? ''), String(item.price ?? ''),
     Boolean(item.vatIncluded), item.note || '',
   ])
   return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right))
@@ -197,6 +218,7 @@ export default function QuotePage() {
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesSaveState, setSalesSaveState] = useState('idle')
+  const [salesEditMode, setSalesEditMode] = useState(false)
   const [costCatalog, setCostCatalog] = useState([])
   const [costCatalogMeta, setCostCatalogMeta] = useState(null)
   const [costCatalogSearch, setCostCatalogSearch] = useState('')
@@ -495,6 +517,8 @@ export default function QuotePage() {
     const sale = createSale()
     persistSales([sale, ...sales])
     setSalesSaveState('idle')
+    setSalesEditMode(true)
+    setCatalogSearchOpenItemId('')
     setSelectedSaleId(sale.id)
     setSalesView('edit')
     setActiveTab('sales')
@@ -502,6 +526,8 @@ export default function QuotePage() {
 
   const openSale = (saleId) => {
     setSalesSaveState('idle')
+    setSalesEditMode(false)
+    setCatalogSearchOpenItemId('')
     setSelectedSaleId(saleId)
     setSalesView('edit')
     setActiveTab('sales')
@@ -510,6 +536,39 @@ export default function QuotePage() {
   const saveSale = () => {
     const saved = persistSales(sales)
     setSalesSaveState(saved ? 'saved' : 'error')
+  }
+
+  const finishSaleEditing = () => {
+    const saved = salesSaveState === 'dirty' ? persistSales(sales) : true
+    setSalesSaveState(saved ? 'saved' : 'error')
+    if (!saved) return
+    setCatalogSearchOpenItemId('')
+    setSalesEditMode(false)
+  }
+
+  const downloadSalesList = () => {
+    const rows = salesRowsForExport(filteredSales)
+    if (!rows.length) {
+      window.alert('다운로드할 품목이 없습니다.')
+      return
+    }
+
+    try {
+      const workbook = createSalesListWorkbook(rows)
+      const blob = new Blob([workbook], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `영업목록_${today().replaceAll('-', '')}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
+    } catch {
+      window.alert('엑셀 파일을 만들지 못했습니다. 다시 시도해 주세요.')
+    }
   }
 
   const deleteSelectedSale = () => {
@@ -526,7 +585,7 @@ export default function QuotePage() {
     setRecipient(quote.recipient || '')
     setRecipientTitle(quote.recipientTitle || '대표이사 귀하')
     setIntro(quote.intro || '아래와 같이 납품 및 청구합니다.')
-    setItems(quote.items?.length ? quote.items : [createItem(1)])
+    setItems(quote.items?.length ? quote.items.map((item, index) => createItem(item?.id ?? index + 1, item)) : [createItem(1)])
     setNotes(quote.notes?.length ? quote.notes : createDefaultNotes(quote.date || today()))
     if (quote.supplier) setSupplier({ ...DEFAULT_SUPPLIER, ...quote.supplier })
     setSelectedQuoteId(quote.id || '')
@@ -702,7 +761,10 @@ export default function QuotePage() {
                   <h1>영업관리</h1>
                   <p>거래처와 품목을 관리하고, 확정된 내용을 견적서로 바로 보냅니다.</p>
                 </div>
-                <button className="button-primary" onClick={openNewSale}>+ 새 영업건</button>
+                <div className="sales-heading-actions">
+                  <button className="btn-light" onClick={downloadSalesList}>엑셀 다운로드</button>
+                  <button className="button-primary" onClick={openNewSale}>+ 새 영업건</button>
+                </div>
               </section>
 
               <section className="sales-list-card">
@@ -757,13 +819,20 @@ export default function QuotePage() {
               <div className="sales-detail-header">
                 <button className="back-button" onClick={() => setSalesView('list')}>← 목록</button>
                 <div className="sales-detail-actions">
-                  <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
-                  <button className="btn-light" onClick={saveSale}>저장</button>
+                  {salesEditMode ? (
+                    <>
+                      <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
+                      <button className="btn-light" onClick={saveSale}>저장</button>
+                      <button className="btn-light" onClick={finishSaleEditing}>편집 완료</button>
+                    </>
+                  ) : <button className="btn-light" onClick={() => { setSalesEditMode(true); setSalesSaveState('idle') }}>편집</button>}
                   {salesSaveState !== 'idle' && <span className={`sales-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                   <button className="button-primary" onClick={() => openQuoteForSale(selectedSale)}>견적서 작성</button>
                 </div>
               </div>
 
+              <div className={`sales-edit-fields${salesEditMode ? ' is-editing' : ' sales-readonly'}`}>
+                <fieldset disabled={!salesEditMode}>
               <section className="sales-detail-title">
                 <div><p className="eyebrow">SALES RECORD</p><h1>{selectedSale.clientName || '새 영업건'}</h1></div>
                 <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
@@ -778,8 +847,8 @@ export default function QuotePage() {
                     <label className="field field-wide"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
                     <label className="field"><span>담당자명</span><input value={selectedSale.contactName} onChange={(event) => updateSaleField('contactName', event.target.value)} placeholder="담당자 이름" /></label>
                     <label className="field"><span>연락처</span><input value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" /></label>
-                    <label className="field"><span>영업 등록일</span><input type="date" value={selectedSale.saleDate} onChange={(event) => updateSaleField('saleDate', event.target.value)} /></label>
-                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
+                    <label className="field"><span>영업 등록일</span><input type="date" value={selectedSale.saleDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('saleDate', event.target.value)} /></label>
+                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
                     <label className="field"><span>수신 표기</span><input value={selectedSale.recipientTitle} onChange={(event) => updateSaleField('recipientTitle', event.target.value)} placeholder="대표이사 귀하" /></label>
                   </div>
                 </section>
@@ -788,7 +857,7 @@ export default function QuotePage() {
                   <div className="form-card-heading">
                     <div><h2>출고 · 입금 관리</h2><p>부분 출고와 부분 입금은 행을 추가해 따로 기록하세요.</p></div>
                   </div>
-                  <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
+                  <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                   <div className="tracking-stack">
                     <section className="tracking-section">
                       <div className="tracking-section-heading"><h3>출고</h3><button type="button" className="btn-light" onClick={addShipment}>+ 출고 추가</button></div>
@@ -800,7 +869,7 @@ export default function QuotePage() {
                               <button type="button" className={`tracking-status-button ${shipment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
                               <button type="button" className={`tracking-status-button ${shipment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
                             </div>
-                            <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
+                            <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onClick={openNativeDatePicker} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
                             <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
                           </div>
                         ))}
@@ -817,8 +886,8 @@ export default function QuotePage() {
                               <button type="button" className={`tracking-status-button ${payment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
                               <button type="button" className={`tracking-status-button ${payment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
                             </div>
-                            <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input type="number" min="0" value={payment.amount ?? ''} onChange={(event) => updatePayment(payment.id, 'amount', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                            <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
+                            <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(payment.amount)} onChange={(event) => updatePayment(payment.id, 'amount', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                            <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onClick={openNativeDatePicker} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
                             <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>
                           </div>
                         ))}
@@ -878,10 +947,10 @@ export default function QuotePage() {
                           </label>
                           <label className="field"><span>품목코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="예: 100450-0001" /></label>
                           <label className="field"><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션 입력" /></label>
-                          <label className="field"><span>구매수량 <em>*</em></span><input type="number" min="0" value={item.qty ?? ''} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} placeholder="수량" /></label>
-                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" /></label>
-                          <label className="field"><span>도매가</span><input type="number" min="0" value={item.wholesalePrice ?? ''} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', event.target.value)} placeholder="도매가 입력" /></label>
-                          <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input type="number" min="0" value={item.price ?? ''} onChange={(event) => updateSaleItem(item.id, 'price', event.target.value)} placeholder="공급가 입력" /></label>
+                          <label className="field"><span>구매수량 <em>*</em></span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} placeholder="수량" /></label>
+                          <label className="field"><span>개당 원가</span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} placeholder="원가 입력" /></label>
+                          <label className="field"><span>도매가</span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} placeholder="도매가 입력" /></label>
+                          <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} placeholder="공급가 입력" /></label>
                           <div className="field"><span>공급가 부가세</span><label className="check-label"><input type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />VAT 포함</label></div>
                         </div>
                         <div className="item-calc-grid">
@@ -900,8 +969,8 @@ export default function QuotePage() {
                     <div><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
                     <div className="margin-shipping-inline">
                       <strong>배송비</strong>
-                      <label className="margin-shipping-field"><span>받는 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                      <label className="margin-shipping-field"><span>부담 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                      <label className="margin-shipping-field"><span>받는 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                      <label className="margin-shipping-field"><span>부담 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
                       <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
                       <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
                     </div>
@@ -924,6 +993,8 @@ export default function QuotePage() {
                 <h2>내부 메모</h2>
                 <textarea className="internal-memo" value={selectedSale.internalMemo} onChange={(event) => updateSaleField('internalMemo', event.target.value)} placeholder="고객 협의 내용, 특이사항 등 내부에서만 볼 메모를 남기세요." rows={4} />
               </section>
+                </fieldset>
+              </div>
             </>
           ) : (
             <div className="empty-state"><h2>영업건을 찾을 수 없습니다.</h2><button className="button-primary" onClick={() => setSalesView('list')}>목록으로 이동</button></div>
@@ -991,10 +1062,10 @@ export default function QuotePage() {
                             <td data-label="품목코드"><input aria-label="품목코드" value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
                             <td data-label="품목명"><input aria-label="품목명" value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
                             <td data-label="규격"><input aria-label="규격" value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
-                            <td data-label="특가 (元) · J"><input aria-label="특가 위안화 J열" className="number-input" type="number" min="0" step="any" value={item.specialPriceYuan} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', event.target.value)} placeholder="-" /></td>
-                            <td data-label="신규원가 (元) · K"><input aria-label="신규원가 위안화 K열" className="number-input" type="number" min="0" step="any" value={item.newCostYuan} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', event.target.value)} placeholder="-" /></td>
-                            <td data-label="works 기존 원가 (N)"><input aria-label="works 기존 원가 N열" className="number-input" type="number" min="0" step="any" value={item.existingCost} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', event.target.value)} placeholder="-" /></td>
-                            <td data-label="works 신규 원가 (O)"><input aria-label="works 신규 원가 O열" className="number-input" type="number" min="0" step="any" value={item.newCost} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', event.target.value)} placeholder="-" /></td>
+                            <td data-label="특가 (元) · J"><input aria-label="특가 위안화 J열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.specialPriceYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', ungroupNumber(event.target.value))} placeholder="-" /></td>
+                            <td data-label="신규원가 (元) · K"><input aria-label="신규원가 위안화 K열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCostYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', ungroupNumber(event.target.value))} placeholder="-" /></td>
+                            <td data-label="works 기존 원가 (N)"><input aria-label="works 기존 원가 N열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.existingCost)} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', ungroupNumber(event.target.value))} placeholder="-" /></td>
+                            <td data-label="works 신규 원가 (O)"><input aria-label="works 신규 원가 O열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCost)} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', ungroupNumber(event.target.value))} placeholder="-" /></td>
                             <td data-label="적용 원가" className="amount cost-apply-cell">{money(item.cost)}</td>
                             <td data-label="관리" className="center cost-delete-cell"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
                           </tr>
@@ -1073,7 +1144,7 @@ export default function QuotePage() {
 
             <div className="quote-table-wrap">
               <table className="items-table">
-                <thead><tr><th className="narrow-cell">No.</th><th>품명</th><th className="spec-cell">규격</th><th className="quantity-cell">수량</th><th className="price-cell">단가</th><th className="supply-cell">공급가액</th><th className="vat-cell">세액</th><th className="note-cell">비고</th><th className="narrow-cell no-print"></th></tr></thead>
+                <thead><tr><th className="narrow-cell">No.</th><th>품명</th><th className="spec-cell">옵션</th><th className="quantity-cell">수량</th><th className="price-cell">단가</th><th className="supply-cell">공급가액</th><th className="vat-cell">세액</th><th className="note-cell">비고</th><th className="narrow-cell no-print"></th></tr></thead>
                 <tbody>
                   {items.map((item, index) => {
                     const { supply, vat } = calculateQuoteItem(item)
@@ -1082,8 +1153,8 @@ export default function QuotePage() {
                         <td className="center">{index + 1}</td>
                         <td><textarea className="editable item-name" data-autosize="true" value={item.name} onChange={(event) => updateItem(item.id, 'name', event.target.value)} placeholder="품명" rows={1} onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
                         <td className="center"><input className="editable" value={item.spec} onChange={(event) => updateItem(item.id, 'spec', event.target.value)} /></td>
-                        <td><input className="editable num" type="number" value={item.qty} onChange={(event) => updateItem(item.id, 'qty', event.target.value)} min="0" /></td>
-                        <td><input className="editable num" type="number" value={item.price} onChange={(event) => updateItem(item.id, 'price', event.target.value)} min="0" /></td>
+                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateItem(item.id, 'qty', ungroupNumber(event.target.value))} /></td>
+                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateItem(item.id, 'price', ungroupNumber(event.target.value))} /></td>
                         <td className="num">{comma(supply)}</td>
                         <td className="center"><label className="quote-vat"><input className="no-print" type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateItem(item.id, 'vatIncluded', event.target.checked)} aria-label="단가에 VAT 포함" />{comma(vat)}</label></td>
                         <td><input className="editable" value={item.note} onChange={(event) => updateItem(item.id, 'note', event.target.value)} placeholder="" /></td>

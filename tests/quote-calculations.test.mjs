@@ -76,6 +76,17 @@ test('shipping is a separate quote item only when checked and greater than zero'
   }
 })
 
+test('quote transfer leaves the option blank instead of carrying a legacy EA unit', () => {
+  const quoteItems = quoteItemsFromSale({
+    items: [
+      { name: '옵션 미입력', spec: 'EA', qty: 1, price: 1000 },
+      { name: '옵션 있음', spec: '대형', qty: 1, price: 2000 },
+    ],
+  })
+  assert.equal(quoteItems[0].spec, '')
+  assert.equal(quoteItems[1].spec, '대형')
+})
+
 test('blank or invalid quote inputs calculate as zero, matching legacy editor behavior', () => {
   for (const missing of ['', '  ', null, undefined, 'abc', Number.NaN]) {
     assert.deepEqual(calculateQuoteItem({ price: missing, qty: 2 }), { supply: 0, vat: 0, total: 0 })

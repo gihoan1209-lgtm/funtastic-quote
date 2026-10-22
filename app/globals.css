@@ -330,7 +330,15 @@ body {
   justify-content: space-between;
   gap: 18px;
 }
-.sales-heading { margin-bottom: 28px; }
+.sales-heading {
+  position: relative;
+  justify-content: center;
+  margin-bottom: 28px;
+  text-align: center;
+}
+.sales-heading > div:first-child, .sales-detail-title > div:first-child { text-align: center; }
+.sales-heading-actions, .sales-detail-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.sales-heading-actions { position: absolute; right: 0; }
 .sales-heading h1, .sales-detail-title h1 { margin: 3px 0 7px; font-size: 29px; letter-spacing: -0.05em; }
 .sales-heading p:not(.eyebrow) { color: var(--text2); font-size: 14px; }
 .eyebrow { color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: 0.09em; }
@@ -357,6 +365,7 @@ body {
 .sales-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   padding: 16px;
   border-bottom: 1px solid var(--border);
@@ -377,7 +386,7 @@ body {
 }
 .sales-search { flex: 1; min-width: 180px; }
 .sales-controls select { min-width: 120px; }
-.sales-count { margin-left: auto; color: var(--text3); font-size: 13px; white-space: nowrap; }
+.sales-count { margin-left: 0; color: var(--text3); font-size: 13px; white-space: nowrap; }
 .sales-table-wrap, .sales-items-wrap { overflow-x: auto; }
 .sales-table { width: 100%; min-width: 750px; border-collapse: collapse; font-size: 13px; }
 .sales-table th {
@@ -385,18 +394,18 @@ body {
   color: var(--text2);
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
-  text-align: left;
+  text-align: center;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-.sales-table td { padding: 15px 14px; border-bottom: 1px solid #ecefea; color: var(--text2); }
+.sales-table td { padding: 15px 14px; border-bottom: 1px solid #ecefea; color: var(--text2); text-align: center; }
 .sales-table tbody tr { cursor: pointer; }
 .sales-table tbody tr:hover td { background: #f7faf7; }
 .sales-table tbody tr:last-child td { border-bottom: 0; }
 .sales-client { color: var(--text) !important; font-weight: 700; }
-.amount { color: var(--text) !important; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-.sales-row-action { text-align: right; }
+.amount { color: var(--text) !important; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.sales-row-action { text-align: center; }
 .table-link { padding: 4px 0; color: var(--green); border: 0; background: transparent; font-size: 12px; font-weight: 700; }
 .table-link:hover { color: var(--green-dark); text-decoration: underline; }
 
@@ -428,8 +437,7 @@ body {
 .empty-state p { max-width: 350px; color: var(--text2); font-size: 13px; line-height: 1.6; }
 .empty-state .button-primary { margin-top: 7px; }
 
-.sales-detail-header { margin-bottom: 22px; }
-.sales-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sales-detail-header { position: relative; justify-content: center; margin-bottom: 22px; }
 .sales-save-status {
   display: inline-flex;
   align-items: center;
@@ -443,18 +451,19 @@ body {
 .sales-save-status-dirty { color: #7d5c10; background: #fff4d7; }
 .sales-save-status-saved { color: #17613d; background: var(--green-soft); }
 .sales-save-status-error { color: #9c332a; background: #fbeceb; }
-.back-button { padding: 4px 0; color: var(--text2); border: 0; background: transparent; font-size: 13px; font-weight: 600; }
+.back-button { position: absolute; left: 0; padding: 4px 0; color: var(--text2); border: 0; background: transparent; font-size: 13px; font-weight: 600; }
 .back-button:hover { color: var(--text); }
-.sales-detail-title { margin-bottom: 18px; }
-.status-select { min-width: 118px; color: var(--green-dark); border-color: #bed3c4; font-weight: 700; }
+.sales-detail-title { position: relative; justify-content: center; margin-bottom: 18px; text-align: center; }
+.status-select { position: absolute; right: 0; min-width: 118px; color: var(--green-dark); border-color: #bed3c4; font-weight: 700; }
 .sales-form-grid { display: grid; grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr); gap: 16px; margin-bottom: 16px; }
 .form-card { padding: 20px; margin-bottom: 16px; }
 .sales-form-grid .form-card { margin-bottom: 0; }
 .form-card h2 { margin-bottom: 15px; font-size: 15px; letter-spacing: -0.03em; }
-.form-card-heading { margin-bottom: 16px; }
+.form-card-heading { justify-content: center; margin-bottom: 16px; text-align: center; }
+.form-card-heading > div:first-child { text-align: center; }
 .form-card-heading h2 { margin-bottom: 3px; }
 .form-card-heading p { color: var(--text2); font-size: 12px; }
-.form-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.form-card-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .form-fields { display: grid; gap: 13px; }
 .two-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field { display: grid; gap: 6px; min-width: 0; }
@@ -464,6 +473,7 @@ body {
 .input-with-unit { display: flex; align-items: center; gap: 8px; }
 .input-with-unit input { width: 100%; }
 .input-with-unit span { color: var(--text2); font-size: 12px; white-space: nowrap; }
+.formatted-number-input { font-variant-numeric: tabular-nums; text-align: right; }
 .shipping-options { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 2px; }
 .check-label, .vat-toggle, .quote-vat { display: inline-flex; align-items: center; gap: 5px; color: var(--text2); font-size: 12px; }
 .check-label input, .vat-toggle input, .quote-vat input { width: 14px; height: 14px; accent-color: var(--green); }
@@ -485,13 +495,13 @@ body {
 .tracking-list { display: grid; gap: 8px; }
 .tracking-row {
   display: grid;
-  grid-template-columns: 58px minmax(146px, 1fr) minmax(145px, 0.8fr) auto;
+  grid-template-columns: 60px minmax(170px, 1fr) minmax(220px, 1.15fr) auto;
   align-items: end;
   gap: 9px;
   padding-top: 9px;
   border-top: 1px solid #e5ece6;
 }
-.tracking-payment-row { grid-template-columns: 52px minmax(128px, 1fr) minmax(118px, 0.8fr) minmax(145px, 0.8fr) auto; }
+.tracking-payment-row { grid-template-columns: 60px minmax(130px, 1fr) minmax(145px, 0.9fr) minmax(190px, 1.15fr) auto; }
 .tracking-row-label { align-self: center; color: var(--text); font-size: 12px; }
 .tracking-status-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid #c9d9cd; border-radius: 7px; background: #fff; }
 .tracking-status-button {
@@ -512,6 +522,30 @@ body {
 .tracking-date-field > span, .tracking-amount-field > span { color: var(--text2); font-size: 10px; font-weight: 700; }
 .tracking-date-field input, .tracking-amount-field input { width: 100%; min-width: 0; }
 .tracking-remove { min-height: 36px; padding: 5px 8px; }
+
+.sales-edit-fields > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.sales-readonly :is(input, textarea, select) {
+  opacity: 1;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+.sales-readonly :is(input:not([type="checkbox"]), textarea, select) {
+  min-height: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.sales-readonly textarea { resize: none; }
+.sales-readonly .status-select { appearance: none; text-align: center; }
+.sales-readonly input[type="date"]::-webkit-calendar-picker-indicator { display: none; }
+.sales-readonly .field { gap: 3px; }
+.sales-readonly .form-card-actions,
+.sales-readonly .sales-item-header > button,
+.sales-readonly .tracking-section-heading > button,
+.sales-readonly .tracking-remove { display: none; }
+.sales-readonly .catalog-search-field { z-index: auto; }
 
 .items-card { padding-bottom: 0; }
 .sales-items-wrap { margin: 0 -20px; }
@@ -624,11 +658,13 @@ body {
   .toolbar-actions { width: 100%; justify-content: flex-start; }
   .app-tab { height: 38px; padding: 0 10px; }
   .app-tab-active::after { right: 8px; left: 8px; }
-  .sales-heading, .sales-detail-title { align-items: flex-start; flex-direction: column; }
+  .sales-heading, .sales-detail-title, .sales-detail-header { align-items: center; flex-direction: column; text-align: center; }
+  .sales-heading-actions, .status-select, .back-button { position: static; }
+  .sales-heading-actions, .sales-detail-actions { justify-content: center; }
   .sales-heading h1, .sales-detail-title h1 { font-size: 25px; }
   .form-card { padding: 16px; }
-  .form-card-heading { align-items: flex-start; flex-direction: column; }
-  .form-card-actions { justify-content: flex-start; }
+  .form-card-heading { align-items: center; flex-direction: column; }
+  .form-card-actions { justify-content: center; }
   .tracking-row, .tracking-payment-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tracking-row-label { grid-column: 1 / -1; }
   .tracking-remove { width: 100%; }
