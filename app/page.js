@@ -13,6 +13,7 @@ import { createSalesListWorkbook, salesRowsForExport } from '../lib/sales-export
 
 const QUOTE_STORAGE_KEY = 'funtastic-quote-history'
 const SALES_STORAGE_KEY = 'funtastic-sales-history'
+const SALES_ACTIVE_VIEW_STORAGE_KEY = 'funtastic-sales-active-view'
 const COST_CATALOG_STORAGE_KEY = 'funtastic-cost-catalog'
 const COST_CATALOG_PAGE_SIZE = 100
 
@@ -219,6 +220,7 @@ export default function QuotePage() {
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
+  const [salesHydrated, setSalesHydrated] = useState(false)
   const [costCatalog, setCostCatalog] = useState([])
   const [costCatalogMeta, setCostCatalogMeta] = useState(null)
   const [costCatalogSearch, setCostCatalogSearch] = useState('')
@@ -280,11 +282,29 @@ export default function QuotePage() {
     } catch {
       setSavedQuotes([])
     }
+    let loadedSales = []
     try {
       const storedSales = JSON.parse(window.localStorage.getItem(SALES_STORAGE_KEY) || '[]')
-      setSales(Array.isArray(storedSales) ? storedSales.map(normalizeSaleRecord) : [])
+      loadedSales = Array.isArray(storedSales) ? storedSales.map(normalizeSaleRecord) : []
+      setSales(loadedSales)
     } catch {
       setSales([])
+    }
+    try {
+      const savedView = JSON.parse(window.sessionStorage.getItem(SALES_ACTIVE_VIEW_STORAGE_KEY) || 'null')
+      const selectedId = typeof savedView?.selectedSaleId === 'string' ? savedView.selectedSaleId : ''
+      if (savedView?.version === 1 && savedView?.tab === 'sales' && selectedId
+        && loadedSales.some((sale) => sale.id === selectedId)) {
+        setActiveTab('sales')
+        setSelectedSaleId(selectedId)
+        setSalesView('edit')
+        setSalesEditMode(false)
+        setSalesSaveState('idle')
+      } else {
+        window.sessionStorage.removeItem(SALES_ACTIVE_VIEW_STORAGE_KEY)
+      }
+    } catch {
+      // Session storage is optional; the sales list still works without it.
     }
     try {
       const storedCatalog = JSON.parse(window.localStorage.getItem(COST_CATALOG_STORAGE_KEY) || 'null')
@@ -297,7 +317,37 @@ export default function QuotePage() {
       setCostCatalog([])
       setCostCatalogMeta(null)
     }
+    setSalesHydrated(true)
   }, [])
+
+  useEffect(() => {
+    if (!salesHydrated) return
+    try {
+      const hasActiveDetail = activeTab === 'sales' && salesView === 'edit' && selectedSaleId
+        && sales.some((sale) => sale.id === selectedSaleId)
+      if (hasActiveDetail) {
+        window.sessionStorage.setItem(SALES_ACTIVE_VIEW_STORAGE_KEY, JSON.stringify({
+          version: 1,
+          tab: 'sales',
+          selectedSaleId,
+        }))
+      } else {
+        window.sessionStorage.removeItem(SALES_ACTIVE_VIEW_STORAGE_KEY)
+      }
+    } catch {
+      // Session storage is optional; the sales list still works without it.
+    }
+  }, [activeTab, sales, salesHydrated, salesView, selectedSaleId])
+
+  useEffect(() => {
+    if (salesSaveState !== 'dirty') return undefined
+    const warnBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [salesSaveState])
 
   const persistQuotes = (nextQuotes) => {
     setSavedQuotes(nextQuotes)
@@ -918,63 +968,96 @@ export default function QuotePage() {
                     <button type="button" className="btn-light" onClick={addSaleItemFromPrevious}>+ 위 품목과 동일하게 추가</button>
                   </div>
                 </div>
-                <div className="sales-item-list">
-                  {selectedSale.items.map((item, index) => {
-                    const margin = calculateSaleItem(item)
-                    const productQuery = item.name ?? ''
-                    const catalogSuggestionsId = `catalog-suggestions-${item.id}`
-                    const isCatalogSearchOpen = catalogSearchOpenItemId === item.id && Boolean(productQuery.trim())
-                    const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 8) : []
-                    return (
-                      <div className="sales-item-card" key={item.id}>
-                        <div className="sales-item-header">
-                          <span>품목 {index + 1}{item.productCode ? ` · ${item.productCode}` : ''}{item.name ? ` · ${item.name}` : ''}</span>
-                          <button className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>품목 삭제</button>
-                        </div>
-                        <div className="sales-item-fields">
-                          <label className="field catalog-search-field" onBlur={(event) => {
-                            if (!event.currentTarget.contains(event.relatedTarget)) setCatalogSearchOpenItemId((current) => current === item.id ? '' : current)
-                          }}>
-                            <span>품명 <em>*</em></span>
-                            <div className="catalog-search-box">
-                              <input
-                                value={productQuery}
-                                onFocus={() => setCatalogSearchOpenItemId(item.id)}
-                                onKeyDown={(event) => { if (event.key === 'Escape') setCatalogSearchOpenItemId('') }}
-                                onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)}
-                                placeholder="품명 검색 또는 직접 입력"
-                                autoComplete="off"
-                                aria-autocomplete="list"
-                                aria-controls={catalogSuggestionsId}
-                                aria-expanded={Boolean(isCatalogSearchOpen)}
-                              />
-                              {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="listbox">
-                                {productCandidates.length ? productCandidates.map((catalogItem) => (
-                                  <button type="button" className="catalog-suggestion" role="option" aria-label={`${catalogItem.name || '품목명 미입력'} 선택`} key={catalogItem.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectCatalogItem(item.id, catalogItem)}>
-                                    <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
-                                    <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
-                                  </button>
-                                )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
-                              </div>}
-                            </div>
-                          </label>
-                          <label className="field"><span>품목코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="예: 100450-0001" /></label>
-                          <label className="field"><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션 입력" /></label>
-                          <label className="field"><span>구매수량 <em>*</em></span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} placeholder="수량" /></label>
-                          <label className="field"><span>개당 원가</span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} placeholder="원가 입력" /></label>
-                          <label className="field"><span>도매가</span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} placeholder="도매가 입력" /></label>
-                          <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} placeholder="공급가 입력" /></label>
-                          <div className="field"><span>공급가 부가세</span><label className="check-label"><input type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />VAT 포함</label></div>
-                        </div>
-                        <div className="item-calc-grid">
-                          <div className="item-calc"><span>할인율</span><strong>{percent(margin.discountRate)}</strong></div>
-                          <div className="item-calc"><span>개당 매출부가세</span><strong>{money(margin.unitVat)}</strong></div>
-                          <div className="item-calc"><span>개당 순이익</span><strong className={margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}>{money(margin.unitProfit)}</strong></div>
-                          <div className="item-calc"><span>개당 순이익률</span><strong className={margin.unitProfitRate != null && margin.unitProfitRate < 0 ? 'amount-negative' : ''}>{percent(margin.unitProfitRate)}</strong></div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div className={`sales-margin-table-wrap${catalogSearchOpenItemId ? ' sales-margin-table-lookup-open' : ''}`}>
+                  <table className="sales-margin-table">
+                    <colgroup>
+                      <col className="sales-margin-product-col" />
+                      <col className="sales-margin-quantity-col" />
+                      <col className="sales-margin-cost-col" />
+                      <col className="sales-margin-wholesale-col" />
+                      <col className="sales-margin-price-col" />
+                      <col className="sales-margin-vat-col" />
+                      <col className="sales-margin-discount-col" />
+                      <col className="sales-margin-sales-vat-col" />
+                      <col className="sales-margin-profit-col" />
+                      <col className="sales-margin-rate-col" />
+                    </colgroup>
+                    <thead>
+                      <tr className="sales-margin-group-row">
+                        <th className="sales-margin-group-product">상품 정보</th>
+                        <th colSpan={2} className="sales-margin-group-purchase">매입</th>
+                        <th colSpan={4} className="sales-margin-group-sales">판매 조건</th>
+                        <th colSpan={3} className="sales-margin-group-profit">예상 수익</th>
+                      </tr>
+                      <tr className="sales-margin-label-row">
+                        <th>품목</th>
+                        <th>수량 <em>*</em></th>
+                        <th>개당 원가</th>
+                        <th>도매가</th>
+                        <th>공급가 / 견적 단가 <em>*</em></th>
+                        <th>부가세</th>
+                        <th>할인율</th>
+                        <th>매출 부가세</th>
+                        <th>개당 순이익</th>
+                        <th>순이익률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedSale.items.map((item, index) => {
+                        const margin = calculateSaleItem(item)
+                        const productQuery = item.name ?? ''
+                        const catalogSuggestionsId = `catalog-suggestions-${item.id}`
+                        const isCatalogSearchOpen = catalogSearchOpenItemId === item.id && Boolean(productQuery.trim())
+                        const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 8) : []
+                        return (
+                          <tr key={item.id}>
+                            <td className="sales-margin-product-cell">
+                              {salesEditMode && <div className="sales-margin-product-toolbar"><span>품목 {index + 1}</span><button type="button" className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>삭제</button></div>}
+                              <div className="catalog-search-field sales-margin-product-search" onBlur={(event) => {
+                                if (!event.currentTarget.contains(event.relatedTarget)) setCatalogSearchOpenItemId((current) => current === item.id ? '' : current)
+                              }}>
+                                <div className="catalog-search-box">
+                                  <input
+                                    value={productQuery}
+                                    onFocus={() => setCatalogSearchOpenItemId(item.id)}
+                                    onKeyDown={(event) => { if (event.key === 'Escape') setCatalogSearchOpenItemId('') }}
+                                    onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)}
+                                    placeholder="품명 검색 또는 직접 입력"
+                                    autoComplete="off"
+                                    aria-label={`품목 ${index + 1} 품명`}
+                                    aria-autocomplete="list"
+                                    aria-controls={catalogSuggestionsId}
+                                    aria-expanded={Boolean(isCatalogSearchOpen)}
+                                  />
+                                  {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="listbox">
+                                    {productCandidates.length ? productCandidates.map((catalogItem) => (
+                                      <button type="button" className="catalog-suggestion" role="option" aria-label={`${catalogItem.name || '품목명 미입력'} 선택`} key={catalogItem.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectCatalogItem(item.id, catalogItem)}>
+                                        <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
+                                        <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
+                                      </button>
+                                    )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
+                                  </div>}
+                                </div>
+                              </div>
+                              <div className="sales-margin-product-meta">
+                                <label><span>코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" aria-label={`품목 ${index + 1} 품목코드`} /></label>
+                                <label><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션" aria-label={`품목 ${index + 1} 옵션`} /></label>
+                              </div>
+                            </td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} placeholder="도매가" aria-label={`품목 ${index + 1} 도매가`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
+                            <td><select className="sales-margin-vat-select" value={item.vatIncluded ? 'included' : 'excluded'} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.value === 'included')} aria-label={`품목 ${index + 1} 부가세`}><option value="included">포함</option><option value="excluded">별도</option></select></td>
+                            <td className="sales-margin-metric">{percent(margin.discountRate)}</td>
+                            <td className="sales-margin-metric">{money(margin.unitVat)}</td>
+                            <td className={`sales-margin-metric sales-margin-profit-value ${margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}`}>{money(margin.unitProfit)}</td>
+                            <td className={`sales-margin-metric sales-margin-profit-rate ${margin.unitProfitRate != null && margin.unitProfitRate < 0 ? 'amount-negative' : ''}`}>{percent(margin.unitProfitRate)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
                 <p className="margin-note">새 품목의 공급가는 엑셀과 같이 VAT 포함이 기본입니다. VAT 미포함을 선택하면 견적서에 부가세 10%가 추가됩니다.</p>
                 <div className="margin-summary">
