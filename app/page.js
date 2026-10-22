@@ -76,6 +76,7 @@ const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
   return {
     ...record,
+    status: record.status === 'confirmed' || record.status === 'issued' ? 'confirmed' : 'draft',
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
     : [createSaleItem(1)],
@@ -106,7 +107,12 @@ const DEFAULT_SUPPLIER = {
 const SALE_STATUS = {
   draft: { label: '작성중', className: 'status-draft' },
   confirmed: { label: '견적 확정', className: 'status-confirmed' },
-  issued: { label: '발행완료', className: 'status-issued' },
+}
+
+const SALES_SAVE_STATUS = {
+  dirty: { label: '저장 필요', className: 'sales-save-status-dirty' },
+  saved: { label: '저장되었습니다', className: 'sales-save-status-saved' },
+  error: { label: '저장 실패', className: 'sales-save-status-error' },
 }
 
 const resizeTextArea = (element) => {
@@ -150,7 +156,6 @@ const createSale = () => {
     shippingVatIncluded: true,
     internalMemo: '',
     quoteId: '',
-    issuedAt: '',
     items: [createSaleItem(1)],
     shipments: [createShipment(1)],
     payments: [createPayment(1)],
@@ -191,6 +196,7 @@ export default function QuotePage() {
   const [selectedSaleId, setSelectedSaleId] = useState('')
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
+  const [salesSaveState, setSalesSaveState] = useState('idle')
   const [costCatalog, setCostCatalog] = useState([])
   const [costCatalogMeta, setCostCatalogMeta] = useState(null)
   const [costCatalogSearch, setCostCatalogSearch] = useState('')
@@ -284,8 +290,10 @@ export default function QuotePage() {
     setSales(nextSales)
     try {
       window.localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(nextSales))
+      return true
     } catch {
       window.alert('브라우저 저장소에 영업건을 저장하지 못했습니다. 새로고침 전에 저장 공간과 브라우저 설정을 확인해주세요.')
+      return false
     }
   }
 
@@ -304,6 +312,7 @@ export default function QuotePage() {
 
   const updateSelectedSale = (updater) => {
     if (!selectedSaleId) return
+    setSalesSaveState('dirty')
     setSales((currentSales) => currentSales.map((sale) => (
       sale.id === selectedSaleId ? { ...updater(sale), updatedAt: new Date().toISOString() } : sale
     )))
@@ -485,18 +494,23 @@ export default function QuotePage() {
   const openNewSale = () => {
     const sale = createSale()
     persistSales([sale, ...sales])
+    setSalesSaveState('idle')
     setSelectedSaleId(sale.id)
     setSalesView('edit')
     setActiveTab('sales')
   }
 
   const openSale = (saleId) => {
+    setSalesSaveState('idle')
     setSelectedSaleId(saleId)
     setSalesView('edit')
     setActiveTab('sales')
   }
 
-  const saveSale = () => persistSales(sales)
+  const saveSale = () => {
+    const saved = persistSales(sales)
+    setSalesSaveState(saved ? 'saved' : 'error')
+  }
 
   const deleteSelectedSale = () => {
     if (!selectedSale) return
@@ -635,17 +649,6 @@ export default function QuotePage() {
   const addNote = () => setNotes((currentNotes) => [...currentNotes, ''])
   const removeNote = (index) => setNotes((currentNotes) => currentNotes.filter((_, noteIndex) => noteIndex !== index))
 
-  const markLinkedSaleIssued = () => {
-    if (!linkedSaleId) return
-    const now = new Date().toISOString()
-    persistSales(sales.map((sale) => sale.id === linkedSaleId ? {
-      ...sale,
-      status: 'issued',
-      issuedAt: now,
-      updatedAt: now,
-    } : sale))
-  }
-
   const handlePrint = () => {
     document.querySelectorAll('textarea[data-autosize="true"]').forEach(resizeTextArea)
     const previousTitle = document.title
@@ -665,7 +668,6 @@ export default function QuotePage() {
       <button className="btn" onClick={loadQuote} disabled={!selectedQuoteId}>불러오기</button>
       <button className="btn" onClick={deleteQuote} disabled={!selectedQuoteId}>삭제</button>
       <button className="btn" onClick={createBlankQuote}>새 견적서</button>
-      {linkedSaleId && <button className="btn" onClick={markLinkedSaleIssued}>발행완료</button>}
       <button className="btn btn-white" onClick={handlePrint}>인쇄 / PDF</button>
     </div>
   )
@@ -757,6 +759,7 @@ export default function QuotePage() {
                 <div className="sales-detail-actions">
                   <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
                   <button className="btn-light" onClick={saveSale}>저장</button>
+                  {salesSaveState !== 'idle' && <span className={`sales-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                   <button className="button-primary" onClick={() => openQuoteForSale(selectedSale)}>견적서 작성</button>
                 </div>
               </div>
@@ -892,30 +895,27 @@ export default function QuotePage() {
                   })}
                 </div>
                 <p className="margin-note">새 품목의 공급가는 엑셀과 같이 VAT 포함이 기본입니다. VAT 미포함을 선택하면 견적서에 부가세 10%가 추가됩니다.</p>
-                <section className="margin-shipping">
-                  <div className="margin-summary-heading"><h3>배송비 · 마진 반영</h3><span>배송비는 총순이익 계산에 바로 반영됩니다</span></div>
-                  <div className="margin-shipping-fields">
-                    <label className="field"><span>받는 배송비 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                    <label className="field"><span>부담 배송비 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
-                  </div>
-                  <div className="shipping-options">
-                    <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />받는 배송비를 견적서와 매출에 반영</label>
-                    <label className="check-label"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />받는 배송비 VAT 포함</label>
-                  </div>
-                  <p className="margin-note">고객에게 받는 배송비와 실제 부담하는 배송비를 각각 입력하세요. 부담 배송비가 없으면 0을 입력합니다.</p>
-                </section>
                 <div className="margin-summary">
-                  <div className="margin-summary-heading"><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
-                  <div className="margin-summary-grid">
-                    <div className="margin-metric"><span>총구매액</span><strong>{money(selectedSaleTotals.totalGross)}</strong><small>고객이 결제할 금액</small></div>
-                    <div className="margin-metric"><span>총원가</span><strong>{money(selectedSaleTotals.totalCost)}</strong><small>원가 × 구매수량</small></div>
-                    <div className="margin-metric"><span>총매출부가세</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
-                    <div className="margin-metric"><span>받는 배송비 (+)</span><strong>{money(selectedSaleTotals.shippingGross)}</strong><small>견적서 반영 선택 시 포함</small></div>
-                    <div className="margin-metric"><span>부담 배송비 (-)</span><strong>{money(selectedSaleTotals.shippingCost)}</strong></div>
-                    <div className="margin-metric"><span>총순이익</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
-                    <div className="margin-metric"><span>총순이익률</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
+                  <div className="margin-summary-heading">
+                    <div><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
+                    <div className="margin-shipping-inline">
+                      <strong>배송비</strong>
+                      <label className="margin-shipping-field"><span>받는 (+)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingFee ?? ''} onChange={(event) => updateSaleField('shippingFee', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                      <label className="margin-shipping-field"><span>부담 (-)</span><div className="input-with-unit"><input type="number" min="0" value={selectedSale.shippingCost ?? ''} onChange={(event) => updateSaleField('shippingCost', event.target.value)} placeholder="0" /><span>원</span></div></label>
+                      <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
+                      <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
+                    </div>
                   </div>
-                  <p className="margin-note">총순이익 = 총구매액 − 총원가 − 총매출부가세 − 부담 배송비. 받는 배송비는 총구매액에 한 번만 포함합니다. 견적 금액과 맞추기 위해 품목별 금액과 부가세를 원 단위로 반올림합니다.</p>
+                  <div className="margin-summary-grid">
+                    <div className="margin-metric"><span>총구매액</span><strong>{money(selectedSaleTotals.totalGross)}</strong></div>
+                    <div className="margin-metric"><span>총원가 (원가×구매수량)</span><strong>{money(selectedSaleTotals.totalCost)}</strong></div>
+                    <div className="margin-metric"><span>총 매출부가세 (품목+배송비)</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
+                    <div className="margin-metric"><span>받는 배송비 (+)</span><strong>{money(selectedSaleTotals.shippingGross)}</strong></div>
+                    <div className="margin-metric"><span>부담 배송비 (-)</span><strong>{money(selectedSaleTotals.shippingCost)}</strong></div>
+                    <div className="margin-metric"><span>총순이익 (구매액−원가−부가세−배송비)</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
+                    <div className="margin-metric"><span>총순이익률 (순이익÷구매액×100)</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
+                  </div>
+                  <p className="margin-note">품목과 배송비의 금액·부가세는 견적 금액과 맞추기 위해 원 단위로 반올림합니다.</p>
                   {selectedSaleTotals.totalProfit == null && <p className="margin-warning">순이익을 계산하려면 모든 품목의 공급가·수량·원가와 부담 배송비를 0 이상으로 입력해 주세요. 받는 배송비를 반영할 때도 금액이 필요합니다. 비용이 없으면 0을 입력하세요.</p>}
                 </div>
               </section>
