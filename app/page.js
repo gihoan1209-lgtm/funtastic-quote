@@ -30,9 +30,9 @@ const formatGroupedNumber = (value) => {
 }
 const nonNegativeInput = (value) => {
   const raw = ungroupNumber(value)
-  return raw === '' || (Number.isFinite(Number(raw)) && Number(raw) >= 0)
+  return raw === '' || (/^\d+(?:\.\d*)?$/.test(raw) && Number.isFinite(Number(raw)) && Number(raw) >= 0)
 }
-const cleanOption = (value) => String(value ?? '').trim() === 'EA' ? '' : String(value ?? '')
+const cleanOption = (value) => String(value ?? '').trim().toUpperCase() === 'EA' ? '' : String(value ?? '')
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const openNativeDatePicker = (event) => {
   try {
@@ -546,6 +546,19 @@ export default function QuotePage() {
     setSalesEditMode(false)
   }
 
+  const leaveSalesEditor = () => {
+    if (salesSaveState === 'dirty') {
+      const shouldSave = window.confirm('저장하지 않은 변경사항이 있습니다.\n\n확인: 저장 후 목록으로 이동\n취소: 현재 화면에 머무르기')
+      if (!shouldSave) return
+      const saved = persistSales(sales)
+      setSalesSaveState(saved ? 'saved' : 'error')
+      if (!saved) return
+    }
+    setCatalogSearchOpenItemId('')
+    setSalesEditMode(false)
+    setSalesView('list')
+  }
+
   const downloadSalesList = () => {
     const rows = salesRowsForExport(filteredSales)
     if (!rows.length) {
@@ -817,7 +830,7 @@ export default function QuotePage() {
           ) : selectedSale ? (
             <>
               <div className="sales-detail-header">
-                <button className="back-button" onClick={() => setSalesView('list')}>← 목록</button>
+                <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
                   {salesEditMode ? (
                     <>

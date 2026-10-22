@@ -15,7 +15,7 @@ test('sales export flattens visible sales into the requested seven columns', () 
     },
     {
       clientName: '테스트 거래처',
-      items: [{ productCode: '0002', name: '샘플', spec: 'EA', cost: 500, qty: 1, price: 900 }],
+      items: [{ productCode: '0002', name: '샘플', spec: 'ea', cost: 500, qty: 1, price: 900 }],
     },
   ])
 

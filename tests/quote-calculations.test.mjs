@@ -79,7 +79,7 @@ test('shipping is a separate quote item only when checked and greater than zero'
 test('quote transfer leaves the option blank instead of carrying a legacy EA unit', () => {
   const quoteItems = quoteItemsFromSale({
     items: [
-      { name: '옵션 미입력', spec: 'EA', qty: 1, price: 1000 },
+      { name: '옵션 미입력', spec: 'ea', qty: 1, price: 1000 },
       { name: '옵션 있음', spec: '대형', qty: 1, price: 2000 },
     ],
   })

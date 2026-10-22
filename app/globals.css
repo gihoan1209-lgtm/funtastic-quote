@@ -636,7 +636,7 @@ body {
 .note-cell { width: 70px; }
 .quote-vat { justify-content: center; white-space: nowrap; font-size: 11px; }
 
-@media (max-width: 1080px) {
+@media (max-width: 1200px) {
   .sales-form-grid { grid-template-columns: 1fr; }
 }
 
