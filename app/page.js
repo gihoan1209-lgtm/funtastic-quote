@@ -88,8 +88,6 @@ const quoteLabel = (quote) => {
 
 const nextItemId = (items) => Math.max(...items.map((item) => Number(item.id) || 0), 0) + 1
 
-const costSourceLabel = (item) => item?.costSource || item?.catalogCostSource || '원가 미입력'
-
 const quoteItemsMatch = (left, right) => {
   const normalize = (list) => (list || []).map((item) => [
     item.name || '', item.spec || 'EA', String(item.qty ?? ''), String(item.price ?? ''),
@@ -375,7 +373,7 @@ export default function QuotePage() {
   }
 
   const updateCostCatalogItem = (itemId, field, value) => {
-    if (['newCost', 'existingCost'].includes(field) && !nonNegativeInput(value)) return
+    if (['specialPriceYuan', 'newCostYuan', 'newCost', 'existingCost'].includes(field) && !nonNegativeInput(value)) return
     setCostCatalog((current) => current.map((item) => (
       item.id === itemId ? normalizeCatalogItem({ ...item, [field]: value }, item.id) : item
     )))
@@ -384,7 +382,9 @@ export default function QuotePage() {
   }
 
   const addCostCatalogItem = () => {
-    const item = normalizeCatalogItem({ id: makeId('cost'), productCode: '', name: '', spec: '', newCost: '', existingCost: '' })
+    const item = normalizeCatalogItem({
+      id: makeId('cost'), productCode: '', name: '', spec: '', specialPriceYuan: '', newCostYuan: '', newCost: '', existingCost: '',
+    })
     setCostCatalog((current) => [...current, item])
     setCostCatalogSearch('')
     setCostCatalogVisibleCount(COST_CATALOG_PAGE_SIZE)
@@ -603,8 +603,8 @@ export default function QuotePage() {
           <div className="toolbar-logo">펀타 영업·견적</div>
           <nav className="app-tabs" aria-label="주요 메뉴">
             <button className={`app-tab ${activeTab === 'sales' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('sales')}>영업관리</button>
-            <button className={`app-tab ${activeTab === 'costs' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('costs')}>원가관리</button>
             <button className={`app-tab ${activeTab === 'quote' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('quote')}>견적서</button>
+            <button className={`app-tab ${activeTab === 'costs' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('costs')}>원가관리</button>
           </nav>
         </div>
         {activeTab === 'quote'
@@ -749,19 +749,18 @@ export default function QuotePage() {
                                 {productCandidates.length ? productCandidates.map((catalogItem) => (
                                   <button type="button" className="catalog-suggestion" key={catalogItem.id} onClick={() => selectCatalogItem(item.id, catalogItem, productSearchKey)}>
                                     <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
-                                    <span className="catalog-suggestion-cost">{money(catalogItem.cost)}<small>{costSourceLabel(catalogItem)}</small></span>
+                                    <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
                                   </button>
                                 )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
                               </div>}
                             </div>
-                            <small>선택하면 품목코드·품명·규격·개당 원가가 복사됩니다. 공급가와 수량은 유지됩니다.</small>
+                            <small>선택하면 품목코드·품명·옵션·개당 원가가 복사됩니다. 공급가와 수량은 유지됩니다.</small>
                           </label>
                           <label className="field"><span>품목코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="예: 100450-0001" /></label>
                           <label className="field"><span>품명 <em>*</em></span><input value={item.name ?? ''} onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)} placeholder="상품명" /></label>
-                          <label className="field"><span>규격</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></label>
-                          <label className="field"><span>옵션 / 비고</span><input value={item.note ?? ''} onChange={(event) => updateSaleItem(item.id, 'note', event.target.value)} placeholder="옵션명" /></label>
+                          <label className="field"><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></label>
                           <label className="field"><span>구매수량 <em>*</em></span><input type="number" min="0" value={item.qty ?? ''} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} placeholder="수량" /></label>
-                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" />{item.catalogCostSource && <small className="catalog-origin">{item.catalogCostSource}</small>}</label>
+                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" /></label>
                           <label className="field"><span>도매가</span><input type="number" min="0" value={item.wholesalePrice ?? ''} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', event.target.value)} placeholder="도매가 입력" /></label>
                           <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input type="number" min="0" value={item.price ?? ''} onChange={(event) => updateSaleItem(item.id, 'price', event.target.value)} placeholder="공급가 입력" /></label>
                           <div className="field"><span>공급가 부가세</span><label className="check-label"><input type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />VAT 포함</label></div>
@@ -816,7 +815,7 @@ export default function QuotePage() {
           <section className="cost-import-card">
             <div>
               <h2>원가 원본 데이터</h2>
-              <p><strong>O열 works 신규 원가</strong>를 우선 적용하고, O열이 비어 있으면 <strong>N열 works 기존 원가</strong>를 사용합니다. 품목코드·품목명·규격과 두 원가 열을 이 브라우저에만 저장합니다.</p>
+              <p><strong>O열 works 신규 원가</strong>를 우선 적용하고, O열이 비어 있으면 <strong>N열 works 기존 원가</strong>를 사용합니다. J열 특가(元), K열 신규원가(元), 품목코드·품목명·규격과 원가 열을 이 브라우저에만 저장합니다.</p>
               {costCatalogMeta && <p className="cost-meta">최근 가져오기: {costCatalogMeta.fileName} · {costCatalogMeta.sheetName || '시트'} · {costCatalogMeta.itemCount?.toLocaleString('ko-KR')}건</p>}
             </div>
             <div className="cost-import-actions">
@@ -846,17 +845,18 @@ export default function QuotePage() {
                 <>
                   <div className="cost-table-wrap">
                     <table className="cost-table">
-                      <thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>works 기존 원가 (N)</th><th>works 신규 원가 (O)</th><th>적용 원가</th><th>원가 출처</th><th></th></tr></thead>
+                      <thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>특가 (元) · J</th><th>신규원가 (元) · K</th><th>works 기존 원가 (N)</th><th>works 신규 원가 (O)</th><th>적용 원가</th><th></th></tr></thead>
                       <tbody>
                         {visibleCostCatalog.map((item) => (
                           <tr key={item.id}>
                             <td><input value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
                             <td><input value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
                             <td><input value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
+                            <td><input className="number-input" type="number" min="0" step="any" value={item.specialPriceYuan} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', event.target.value)} placeholder="-" /></td>
+                            <td><input className="number-input" type="number" min="0" step="any" value={item.newCostYuan} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', event.target.value)} placeholder="-" /></td>
                             <td><input className="number-input" type="number" min="0" step="any" value={item.existingCost} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', event.target.value)} placeholder="-" /></td>
                             <td><input className="number-input" type="number" min="0" step="any" value={item.newCost} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', event.target.value)} placeholder="-" /></td>
                             <td className="amount">{money(item.cost)}</td>
-                            <td><span className={`cost-source ${item.cost != null ? '' : 'cost-source-empty'}`}>{costSourceLabel(item)}</span></td>
                             <td className="center"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
                           </tr>
                         ))}

@@ -14,15 +14,19 @@ const headers = Array.from({ length: 19 }, () => '')
 headers[0] = '품목코드'
 headers[1] = '품목명'
 headers[2] = '규격정보'
+headers[9] = '특가(元)'
+headers[10] = '신규원가(元)'
 headers[13] = 'works 기존 원가'
 headers[14] = 'works 신규 원가'
 headers[15] = '품목구분'
 
-const row = ({ code, name, spec = '', existingCost = '', newCost = '', category = '' }) => {
+const row = ({ code, name, spec = '', specialPriceYuan = '', newCostYuan = '', existingCost = '', newCost = '', category = '' }) => {
   const values = Array.from({ length: 19 }, () => '')
   values[0] = code
   values[1] = name
   values[2] = spec
+  values[9] = specialPriceYuan
+  values[10] = newCostYuan
   values[13] = existingCost
   values[14] = newCost
   values[15] = category
@@ -48,11 +52,11 @@ test('keeps a partially typed decimal visible until the source-table edit is com
   assert.equal(item.costSource, 'works 기존 원가')
 })
 
-test('imports workbook rows while retaining code, name, spec, raw work costs, and applied cost', () => {
+test('imports workbook rows while retaining code, name, spec, J/K yuan values, raw work costs, and applied cost', () => {
   const result = catalogItemsFromWorksheetRows([
     ['회사명 : 테이포프'],
     headers,
-    row({ code: '00001', name: '에어캡포장', spec: '완충재', existingCost: 1500, newCost: 1608, category: '[부재료]' }),
+    row({ code: '00001', name: '에어캡포장', spec: '완충재', specialPriceYuan: 16.8, newCostYuan: 18.2, existingCost: 1500, newCost: 1608, category: '[부재료]' }),
     row({ code: '00002', name: '기존원가 품목', spec: 'EA', existingCost: 700, category: '[상품]' }),
     row({ code: '00003', name: '원가 미입력' }),
   ])
@@ -65,6 +69,8 @@ test('imports workbook rows while retaining code, name, spec, raw work costs, an
     name: '에어캡포장',
     spec: '완충재',
     category: '[부재료]',
+    specialPriceYuan: '16.8',
+    newCostYuan: '18.2',
     newCost: '1608',
     existingCost: '1500',
     cost: 1608,
