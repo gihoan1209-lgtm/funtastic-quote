@@ -119,7 +119,7 @@ test('each line rounds its price times quantity before computing VAT', () => {
 test('copying to a quote cannot leak cost, wholesale price, profit, or other internal fields', () => {
   const quoteItems = quoteItemsFromSale({
     items: [
-      { id: 8, name: '공개 상품', spec: 'BOX', qty: 2, price: 1000, vatIncluded: true, note: '옵션', cost: 500, wholesalePrice: 1200, profit: 400, internalMemo: '비공개' },
+      { id: 8, name: '공개 상품', spec: 'BOX', qty: 2, price: 1000, vatIncluded: true, note: '옵션', productCode: '100450-0001', catalogItemId: 'catalog-42', catalogCostSource: 'works 신규 원가', cost: 500, wholesalePrice: 1200, profit: 400, internalMemo: '비공개' },
       { id: 9, name: '  ', price: 2000, cost: 1000 },
     ],
     includeShipping: true,

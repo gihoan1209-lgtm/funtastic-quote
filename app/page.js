@@ -1,11 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { calculateSaleItem, calculateSaleTotals } from '../lib/sales-calculations.mjs'
 import { calculateQuoteItem, calculateQuoteTotals, quoteItemsFromSale } from '../lib/quote-calculations.mjs'
+import {
+  applyCatalogItemToSaleItem,
+  catalogItemsFromWorksheetRows,
+  normalizeCatalogItem,
+  searchCostCatalog,
+} from '../lib/cost-catalog.mjs'
 
 const QUOTE_STORAGE_KEY = 'funtastic-quote-history'
 const SALES_STORAGE_KEY = 'funtastic-sales-history'
+const COST_CATALOG_STORAGE_KEY = 'funtastic-cost-catalog'
+const COST_CATALOG_PAGE_SIZE = 100
 
 const today = () => new Date().toISOString().slice(0, 10)
 const comma = (value) => Math.round(Number(value) || 0).toLocaleString('ko-KR')
@@ -35,6 +43,7 @@ const createItem = (id = 1, values = {}) => ({
 })
 
 const createSaleItem = (id = 1, values = {}) => createItem(id, {
+  productCode: '',
   cost: '',
   wholesalePrice: '',
   vatIncluded: true,
@@ -78,6 +87,8 @@ const quoteLabel = (quote) => {
 }
 
 const nextItemId = (items) => Math.max(...items.map((item) => Number(item.id) || 0), 0) + 1
+
+const costSourceLabel = (item) => item?.costSource || item?.catalogCostSource || '원가 미입력'
 
 const quoteItemsMatch = (left, right) => {
   const normalize = (list) => (list || []).map((item) => [
@@ -147,6 +158,14 @@ export default function QuotePage() {
   const [selectedSaleId, setSelectedSaleId] = useState('')
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
+  const [costCatalog, setCostCatalog] = useState([])
+  const [costCatalogMeta, setCostCatalogMeta] = useState(null)
+  const [costCatalogSearch, setCostCatalogSearch] = useState('')
+  const [costCatalogVisibleCount, setCostCatalogVisibleCount] = useState(COST_CATALOG_PAGE_SIZE)
+  const [costCatalogDirty, setCostCatalogDirty] = useState(false)
+  const [costCatalogMessage, setCostCatalogMessage] = useState('')
+  const [productSearches, setProductSearches] = useState({})
+  const costFileInputRef = useRef(null)
 
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
@@ -163,6 +182,15 @@ export default function QuotePage() {
   const linkedSale = sales.find((sale) => sale.id === linkedSaleId)
   const totals = useMemo(() => calculateQuoteTotals(items), [items])
   const selectedSaleTotals = selectedSale ? calculateSaleTotals(selectedSale) : null
+
+  const filteredCostCatalog = useMemo(() => {
+    if (!costCatalogSearch.trim()) return costCatalog
+    return searchCostCatalog(costCatalog, costCatalogSearch, Number.POSITIVE_INFINITY)
+  }, [costCatalog, costCatalogSearch])
+  const visibleCostCatalog = useMemo(
+    () => filteredCostCatalog.slice(0, costCatalogVisibleCount),
+    [filteredCostCatalog, costCatalogVisibleCount],
+  )
 
   const filteredSales = useMemo(() => {
     const query = salesSearch.trim().toLocaleLowerCase('ko-KR')
@@ -197,6 +225,17 @@ export default function QuotePage() {
     } catch {
       setSales([])
     }
+    try {
+      const storedCatalog = JSON.parse(window.localStorage.getItem(COST_CATALOG_STORAGE_KEY) || 'null')
+      const storedItems = Array.isArray(storedCatalog) ? storedCatalog : storedCatalog?.items
+      setCostCatalog(Array.isArray(storedItems)
+        ? storedItems.map((item, index) => normalizeCatalogItem(item, `stored-${index + 1}`))
+        : [])
+      setCostCatalogMeta(Array.isArray(storedCatalog) ? null : (storedCatalog?.meta || null))
+    } catch {
+      setCostCatalog([])
+      setCostCatalogMeta(null)
+    }
   }, [])
 
   const persistQuotes = (nextQuotes) => {
@@ -217,6 +256,19 @@ export default function QuotePage() {
     }
   }
 
+  const persistCostCatalog = (nextCatalog, nextMeta = costCatalogMeta) => {
+    const normalizedCatalog = nextCatalog.map((item, index) => normalizeCatalogItem(item, `catalog-${index + 1}`))
+    setCostCatalog(normalizedCatalog)
+    setCostCatalogMeta(nextMeta)
+    try {
+      window.localStorage.setItem(COST_CATALOG_STORAGE_KEY, JSON.stringify({ items: normalizedCatalog, meta: nextMeta }))
+      return true
+    } catch {
+      window.alert('브라우저 저장소에 원가 데이터를 저장하지 못했습니다. 파일 크기와 브라우저 저장 공간을 확인해주세요.')
+      return false
+    }
+  }
+
   const updateSelectedSale = (updater) => {
     if (!selectedSaleId) return
     setSales((currentSales) => currentSales.map((sale) => (
@@ -232,7 +284,22 @@ export default function QuotePage() {
     if (['qty', 'price', 'cost', 'wholesalePrice'].includes(field) && !nonNegativeInput(value)) return
     updateSelectedSale((sale) => ({
       ...sale,
-      items: sale.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
+      items: sale.items.map((item) => {
+        if (item.id !== itemId) return item
+        const nextItem = { ...item, [field]: value }
+        // A product selection is a margin snapshot. If its identifying fields
+        // are subsequently edited by hand, do not imply it is still linked to
+        // the source-catalog row.
+        if (['name', 'productCode', 'spec'].includes(field) && item.catalogItemId) {
+          nextItem.catalogItemId = ''
+          nextItem.catalogCostSource = '품목 정보 수정됨 · 원가 확인'
+        }
+        if (field === 'cost') {
+          nextItem.catalogItemId = ''
+          nextItem.catalogCostSource = '직접 입력'
+        }
+        return nextItem
+      }),
     }))
   }
   const addSaleItem = () => updateSelectedSale((sale) => ({
@@ -243,6 +310,103 @@ export default function QuotePage() {
     ...sale,
     items: sale.items.length === 1 ? sale.items : sale.items.filter((item) => item.id !== itemId),
   }))
+
+  const updateProductSearch = (searchKey, value) => {
+    setProductSearches((current) => ({ ...current, [searchKey]: value }))
+  }
+
+  const selectCatalogItem = (itemId, catalogItem, searchKey) => {
+    updateSelectedSale((sale) => ({
+      ...sale,
+      items: sale.items.map((item) => item.id === itemId ? applyCatalogItemToSaleItem(item, catalogItem) : item),
+    }))
+    setProductSearches((current) => ({ ...current, [searchKey]: '' }))
+  }
+
+  const openCostFilePicker = () => costFileInputRef.current?.click()
+
+  const importCostCatalog = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    try {
+      const { xlsxSheetsFromFile } = await import('../lib/xlsx-client.mjs')
+      const workbookSheets = await xlsxSheetsFromFile(file)
+      let parsedCatalog = null
+      let matchedSheetName = ''
+      let lastError = null
+
+      for (const sheet of workbookSheets) {
+        try {
+          const candidate = catalogItemsFromWorksheetRows(sheet.rows)
+          if (candidate.items.length) {
+            parsedCatalog = candidate
+            matchedSheetName = sheet.name
+            break
+          }
+        } catch (error) {
+          lastError = error
+        }
+      }
+
+      if (!parsedCatalog) throw lastError || new Error('가져올 수 있는 품목 행이 없습니다.')
+      if (costCatalog.length && !window.confirm(`현재 원가표 ${costCatalog.length.toLocaleString('ko-KR')}건을 ${parsedCatalog.items.length.toLocaleString('ko-KR')}건으로 교체할까요?\n\n이미 영업건에 선택해 입력된 원가와 마진은 바뀌지 않습니다.`)) return
+
+      const importedAt = new Date().toISOString()
+      const metadata = {
+        fileName: file.name,
+        sheetName: matchedSheetName,
+        importedAt,
+        itemCount: parsedCatalog.items.length,
+        headerRow: parsedCatalog.headerRow,
+      }
+      const saved = persistCostCatalog(parsedCatalog.items, metadata)
+      setCostCatalogDirty(false)
+      setCostCatalogSearch('')
+      setCostCatalogVisibleCount(COST_CATALOG_PAGE_SIZE)
+      setCostCatalogMessage(saved
+        ? `${parsedCatalog.items.length.toLocaleString('ko-KR')}개 품목을 가져왔습니다. O열 신규 원가가 없으면 N열 기존 원가를 적용합니다.`
+        : '화면에는 가져왔지만 브라우저 저장에 실패했습니다. 저장 공간을 확인한 뒤 다시 가져와 주세요.')
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '알 수 없는 오류'
+      window.alert(`원가 파일을 가져오지 못했습니다.\n${detail}`)
+    }
+  }
+
+  const updateCostCatalogItem = (itemId, field, value) => {
+    if (['newCost', 'existingCost'].includes(field) && !nonNegativeInput(value)) return
+    setCostCatalog((current) => current.map((item) => (
+      item.id === itemId ? normalizeCatalogItem({ ...item, [field]: value }, item.id) : item
+    )))
+    setCostCatalogDirty(true)
+    setCostCatalogMessage('')
+  }
+
+  const addCostCatalogItem = () => {
+    const item = normalizeCatalogItem({ id: makeId('cost'), productCode: '', name: '', spec: '', newCost: '', existingCost: '' })
+    setCostCatalog((current) => [...current, item])
+    setCostCatalogSearch('')
+    setCostCatalogVisibleCount(COST_CATALOG_PAGE_SIZE)
+    setCostCatalogDirty(true)
+    setCostCatalogMessage('')
+  }
+
+  const deleteCostCatalogItem = (itemId) => {
+    const item = costCatalog.find((candidate) => candidate.id === itemId)
+    if (!item || !window.confirm(`${item.name || item.productCode || '이 원가 품목'}을(를) 원가표에서 삭제할까요?\n\n이미 영업건에 입력된 원가와 마진은 유지됩니다.`)) return
+    setCostCatalog((current) => current.filter((candidate) => candidate.id !== itemId))
+    setCostCatalogDirty(true)
+    setCostCatalogMessage('')
+  }
+
+  const saveCostCatalog = () => {
+    const saved = persistCostCatalog(costCatalog, costCatalogMeta)
+    if (saved) {
+      setCostCatalogDirty(false)
+      setCostCatalogMessage(`${costCatalog.length.toLocaleString('ko-KR')}개 품목을 이 브라우저에 저장했습니다.`)
+    }
+  }
 
   const openNewSale = () => {
     const sale = createSale()
@@ -439,13 +603,18 @@ export default function QuotePage() {
           <div className="toolbar-logo">펀타 영업·견적</div>
           <nav className="app-tabs" aria-label="주요 메뉴">
             <button className={`app-tab ${activeTab === 'sales' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('sales')}>영업관리</button>
+            <button className={`app-tab ${activeTab === 'costs' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('costs')}>원가관리</button>
             <button className={`app-tab ${activeTab === 'quote' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('quote')}>견적서</button>
           </nav>
         </div>
         {activeTab === 'quote'
           ? quoteToolbar
-          : <div className="toolbar-actions"><button className="btn btn-white" onClick={openNewSale}>+ 새 영업건</button></div>}
+          : activeTab === 'costs'
+            ? <div className="toolbar-actions"><button className="btn-light" onClick={saveCostCatalog} disabled={!costCatalogDirty}>원가표 저장</button><button className="btn btn-white" onClick={openCostFilePicker}>원가 파일 가져오기</button></div>
+            : <div className="toolbar-actions"><button className="btn btn-white" onClick={openNewSale}>+ 새 영업건</button></div>}
       </header>
+
+      <input ref={costFileInputRef} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importCostCatalog} />
 
       {activeTab === 'sales' ? (
         <main className="sales-page">
@@ -562,18 +731,37 @@ export default function QuotePage() {
                 <div className="sales-item-list">
                   {selectedSale.items.map((item, index) => {
                     const margin = calculateSaleItem(item)
+                    const productSearchKey = `${selectedSale.id}:${item.id}`
+                    const productQuery = productSearches[productSearchKey] || ''
+                    const productCandidates = productQuery.trim() ? searchCostCatalog(costCatalog, productQuery, 8) : []
                     return (
                       <div className="sales-item-card" key={item.id}>
                         <div className="sales-item-header">
-                          <span>품목 {index + 1}{item.name ? ` · ${item.name}` : ''}</span>
+                          <span>품목 {index + 1}{item.productCode ? ` · ${item.productCode}` : ''}{item.name ? ` · ${item.name}` : ''}</span>
                           <button className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>품목 삭제</button>
                         </div>
                         <div className="sales-item-fields">
+                          <label className="field field-wide catalog-search-field">
+                            <span>원가표에서 품목 찾기</span>
+                            <div className="catalog-search-box">
+                              <input value={productQuery} onChange={(event) => updateProductSearch(productSearchKey, event.target.value)} placeholder="품목명 또는 품목코드로 검색" autoComplete="off" />
+                              {productQuery.trim() && <div className="catalog-suggestions">
+                                {productCandidates.length ? productCandidates.map((catalogItem) => (
+                                  <button type="button" className="catalog-suggestion" key={catalogItem.id} onClick={() => selectCatalogItem(item.id, catalogItem, productSearchKey)}>
+                                    <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
+                                    <span className="catalog-suggestion-cost">{money(catalogItem.cost)}<small>{costSourceLabel(catalogItem)}</small></span>
+                                  </button>
+                                )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
+                              </div>}
+                            </div>
+                            <small>선택하면 품목코드·품명·규격·개당 원가가 복사됩니다. 공급가와 수량은 유지됩니다.</small>
+                          </label>
+                          <label className="field"><span>품목코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="예: 100450-0001" /></label>
                           <label className="field"><span>품명 <em>*</em></span><input value={item.name ?? ''} onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)} placeholder="상품명" /></label>
                           <label className="field"><span>규격</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="EA" /></label>
                           <label className="field"><span>옵션 / 비고</span><input value={item.note ?? ''} onChange={(event) => updateSaleItem(item.id, 'note', event.target.value)} placeholder="옵션명" /></label>
                           <label className="field"><span>구매수량 <em>*</em></span><input type="number" min="0" value={item.qty ?? ''} onChange={(event) => updateSaleItem(item.id, 'qty', event.target.value)} placeholder="수량" /></label>
-                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" /></label>
+                          <label className="field"><span>개당 원가</span><input type="number" min="0" value={item.cost ?? ''} onChange={(event) => updateSaleItem(item.id, 'cost', event.target.value)} placeholder="원가 입력" />{item.catalogCostSource && <small className="catalog-origin">{item.catalogCostSource}</small>}</label>
                           <label className="field"><span>도매가</span><input type="number" min="0" value={item.wholesalePrice ?? ''} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', event.target.value)} placeholder="도매가 입력" /></label>
                           <label className="field"><span>공급가 / 견적 단가 <em>*</em></span><input type="number" min="0" value={item.price ?? ''} onChange={(event) => updateSaleItem(item.id, 'price', event.target.value)} placeholder="공급가 입력" /></label>
                           <div className="field"><span>공급가 부가세</span><label className="check-label"><input type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.checked)} />VAT 포함</label></div>
@@ -613,6 +801,84 @@ export default function QuotePage() {
           ) : (
             <div className="empty-state"><h2>영업건을 찾을 수 없습니다.</h2><button className="button-primary" onClick={() => setSalesView('list')}>목록으로 이동</button></div>
           )}
+        </main>
+      ) : activeTab === 'costs' ? (
+        <main className="cost-page">
+          <section className="sales-heading">
+            <div>
+              <p className="eyebrow">COST CATALOG</p>
+              <h1>원가관리</h1>
+              <p>원가 파일을 가져오면 영업관리에서 품목 또는 품목코드로 검색해 원가를 바로 채울 수 있습니다.</p>
+            </div>
+            <button className="button-primary" onClick={openCostFilePicker}>원가 파일 가져오기</button>
+          </section>
+
+          <section className="cost-import-card">
+            <div>
+              <h2>원가 원본 데이터</h2>
+              <p><strong>O열 works 신규 원가</strong>를 우선 적용하고, O열이 비어 있으면 <strong>N열 works 기존 원가</strong>를 사용합니다. 품목코드·품목명·규격과 두 원가 열을 이 브라우저에만 저장합니다.</p>
+              {costCatalogMeta && <p className="cost-meta">최근 가져오기: {costCatalogMeta.fileName} · {costCatalogMeta.sheetName || '시트'} · {costCatalogMeta.itemCount?.toLocaleString('ko-KR')}건</p>}
+            </div>
+            <div className="cost-import-actions">
+              {costCatalogDirty && <span className="catalog-unsaved">저장 필요</span>}
+              <button className="btn-light" onClick={saveCostCatalog} disabled={!costCatalogDirty}>원가표 저장</button>
+              <button className="btn" onClick={openCostFilePicker}>{costCatalog.length ? '새 파일로 교체' : '엑셀 파일 선택'}</button>
+            </div>
+          </section>
+
+          {costCatalogMessage && <p className="catalog-message" role="status">{costCatalogMessage}</p>}
+
+          <section className="sales-list-card cost-catalog-card">
+            <div className="sales-controls">
+              <input
+                className="sales-search"
+                value={costCatalogSearch}
+                onChange={(event) => { setCostCatalogSearch(event.target.value); setCostCatalogVisibleCount(COST_CATALOG_PAGE_SIZE) }}
+                placeholder="품목코드, 품목명, 규격 검색"
+                aria-label="원가 품목 검색"
+              />
+              <button className="btn-light" onClick={addCostCatalogItem}>+ 직접 추가</button>
+              <span className="sales-count">{filteredCostCatalog.length.toLocaleString('ko-KR')}건{costCatalogDirty ? ' · 저장 필요' : ''}</span>
+            </div>
+
+            {costCatalog.length ? (
+              filteredCostCatalog.length ? (
+                <>
+                  <div className="cost-table-wrap">
+                    <table className="cost-table">
+                      <thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>works 기존 원가 (N)</th><th>works 신규 원가 (O)</th><th>적용 원가</th><th>원가 출처</th><th></th></tr></thead>
+                      <tbody>
+                        {visibleCostCatalog.map((item) => (
+                          <tr key={item.id}>
+                            <td><input value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
+                            <td><input value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
+                            <td><input value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
+                            <td><input className="number-input" type="number" min="0" step="any" value={item.existingCost} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', event.target.value)} placeholder="-" /></td>
+                            <td><input className="number-input" type="number" min="0" step="any" value={item.newCost} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', event.target.value)} placeholder="-" /></td>
+                            <td className="amount">{money(item.cost)}</td>
+                            <td><span className={`cost-source ${item.cost != null ? '' : 'cost-source-empty'}`}>{costSourceLabel(item)}</span></td>
+                            <td className="center"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {visibleCostCatalog.length < filteredCostCatalog.length && <div className="cost-load-more"><button className="btn-light" onClick={() => setCostCatalogVisibleCount((current) => current + COST_CATALOG_PAGE_SIZE)}>다음 {Math.min(COST_CATALOG_PAGE_SIZE, filteredCostCatalog.length - visibleCostCatalog.length)}건 더 보기</button><span>{visibleCostCatalog.length.toLocaleString('ko-KR')} / {filteredCostCatalog.length.toLocaleString('ko-KR')}건 표시</span></div>}
+                </>
+              ) : (
+                <div className="empty-state"><h2>검색 결과가 없습니다.</h2><p>품목코드, 품목명 또는 규격을 다시 확인해 주세요.</p></div>
+              )
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">₩</div>
+                <h2>아직 원가 데이터가 없습니다.</h2>
+                <p>원가 엑셀 파일을 가져오면 품목 검색과 원가 자동 입력을 바로 사용할 수 있습니다.</p>
+                <button className="button-primary" onClick={openCostFilePicker}>원가 파일 가져오기</button>
+              </div>
+            )}
+          </section>
+
+          <p className="cost-catalog-help">원가표를 수정하거나 새 파일로 교체해도, 이미 영업건에 입력된 원가와 마진은 바뀌지 않습니다. 과거 견적의 수익 기록을 보호하기 위해 선택 당시의 값만 영업건에 복사합니다.</p>
         </main>
       ) : (
         <main className="page">

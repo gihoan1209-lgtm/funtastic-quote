@@ -6,11 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/quote-calculations.test.mjs tests/sales-calculations.test.mjs"
+    "test": "node --test tests/quote-calculations.test.mjs tests/sales-calculations.test.mjs tests/cost-catalog.test.mjs"
   },
   "dependencies": {
-    "next": "14.2.5",
+    "next": "14.2.35",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "fflate": "^0.8.2"
   }
 }
