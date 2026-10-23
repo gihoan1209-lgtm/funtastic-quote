@@ -1107,12 +1107,10 @@ export default function QuotePage() {
             <>
               <div className="sales-detail-header">
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
-                <div className="sales-detail-status">
+                <div className="sales-detail-actions">
                   <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태" disabled={!salesEditMode}>
                     {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
                   </select>
-                </div>
-                <div className="sales-detail-actions">
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
