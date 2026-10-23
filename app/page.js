@@ -282,7 +282,9 @@ const SalesStatusPicker = ({ value, onChange }) => {
         onKeyDown={handleTriggerKeyDown}
       >
         <span>{activeStatus.label}</span>
-        <span className="sales-status-caret" aria-hidden="true">⌄</span>
+        <svg className="sales-status-caret" viewBox="0 0 12 8" aria-hidden="true" focusable="false">
+          <path d="m1 1.5 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {isOpen && (
         <div className="sales-status-menu" role="listbox" aria-label="영업 상태">
