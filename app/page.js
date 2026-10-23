@@ -187,6 +187,126 @@ const SALE_STATUS = {
   completed: { label: '완료', className: 'status-completed' },
 }
 
+const SalesStatusPicker = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const pickerRef = useRef(null)
+  const triggerRef = useRef(null)
+  const optionRefs = useRef([])
+  const statuses = Object.entries(SALE_STATUS)
+  const selectedIndex = Math.max(0, statuses.findIndex(([status]) => status === value))
+
+  const focusOption = (index) => {
+    const nextIndex = (index + statuses.length) % statuses.length
+    window.requestAnimationFrame(() => optionRefs.current[nextIndex]?.focus())
+  }
+
+  const closeMenu = (returnFocus = false) => {
+    setIsOpen(false)
+    if (returnFocus) window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  const openMenu = (index = selectedIndex) => {
+    setIsOpen(true)
+    focusOption(index)
+  }
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const closeOnOutsidePointer = (event) => {
+      if (!pickerRef.current?.contains(event.target)) setIsOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault()
+        closeMenu(true)
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [isOpen])
+
+  const selectStatus = (status) => {
+    onChange(status)
+    closeMenu(true)
+  }
+
+  const handleTriggerKeyDown = (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'Home') {
+      event.preventDefault()
+      openMenu(event.key === 'Home' ? 0 : selectedIndex)
+    }
+    if (event.key === 'ArrowUp' || event.key === 'End') {
+      event.preventDefault()
+      openMenu(event.key === 'End' ? statuses.length - 1 : selectedIndex)
+    }
+  }
+
+  const handleOptionKeyDown = (event, index, status) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      focusOption(index + 1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      focusOption(index - 1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      focusOption(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      focusOption(statuses.length - 1)
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      selectStatus(status)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMenu(true)
+    }
+  }
+
+  const activeStatus = SALE_STATUS[value] || SALE_STATUS.draft
+
+  return (
+    <div className="sales-status-picker" ref={pickerRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="sales-status-trigger"
+        aria-label="영업 상태"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => (isOpen ? closeMenu() : openMenu())}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span>{activeStatus.label}</span>
+        <span className="sales-status-caret" aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && (
+        <div className="sales-status-menu" role="listbox" aria-label="영업 상태">
+          {statuses.map(([status, details], index) => (
+            <button
+              key={status}
+              ref={(element) => { optionRefs.current[index] = element }}
+              type="button"
+              className={`sales-status-option${status === value ? ' is-selected' : ''}`}
+              role="option"
+              aria-selected={status === value}
+              tabIndex={status === value ? 0 : -1}
+              onClick={() => selectStatus(status)}
+              onKeyDown={(event) => handleOptionKeyDown(event, index, status)}
+            >
+              {details.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SALES_DATE_FIELDS = [
   { value: 'saleDate', label: '등록일' },
   { value: 'quoteDate', label: '견적일' },
@@ -881,6 +1001,17 @@ export default function QuotePage() {
     }
   }
 
+  const deleteSelectedSalesFromList = () => {
+    const selectedIds = new Set(selectedSales.map((sale) => sale.id))
+    if (!selectedIds.size) return
+    const count = selectedIds.size
+    if (!window.confirm(`선택한 영업건 ${count}건을 삭제할까요?\n\n연결된 견적서는 유지됩니다.`)) return
+    persistSales(sales.filter((sale) => !selectedIds.has(sale.id)))
+    persistQuotes(savedQuotes.map((quote) => selectedIds.has(quote.salesId) ? { ...quote, salesId: null } : quote))
+    setSelectedSaleIds([])
+    setSalesSaveState('idle')
+  }
+
   const deleteSelectedSale = () => {
     if (!selectedSale) return
     if (!window.confirm(`${selectedSale.clientName || '이 영업건'}을(를) 삭제할까요? 연결된 견적서는 유지됩니다.`)) return
@@ -1075,6 +1206,7 @@ export default function QuotePage() {
                 <div className="sales-heading-actions">
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('selected')} disabled={!selectedSales.length}>선택 엑셀 다운로드 ({selectedSales.length})</button>
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('all')} disabled={!sales.length}>전체 엑셀 다운로드</button>
+                  <button className="btn-light btn-del sales-heading-action" onClick={deleteSelectedSalesFromList} disabled={!selectedSales.length}>선택 삭제 ({selectedSales.length})</button>
                   <button className="button-primary sales-heading-action" onClick={openNewSale}>+ 새 영업건</button>
                 </div>
               </section>
@@ -1148,9 +1280,7 @@ export default function QuotePage() {
               <div className="sales-detail-header">
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
-                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleStatus(event.target.value)} aria-label="영업 상태">
-                    {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
-                  </select>
+                  <SalesStatusPicker value={selectedSale.status} onChange={updateSaleStatus} />
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
