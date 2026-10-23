@@ -450,8 +450,7 @@ body {
 .back-button { padding: 4px 0; color: var(--text2); border: 0; background: transparent; font-size: 13px; font-weight: 600; }
 .back-button:hover { color: var(--text); }
 .sales-detail-title { margin-bottom: 18px; text-align: left; }
-.sales-title-tools { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
-.sales-date-strip { display: grid; grid-template-columns: repeat(2, minmax(140px, 165px)); gap: 8px; }
+.sales-date-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .sales-date-strip .field { gap: 4px; }
 .sales-date-strip input { min-height: 36px; }
 .status-select { min-width: 118px; color: var(--green-dark); border-color: #bed3c4; font-weight: 700; }
@@ -480,6 +479,7 @@ body {
 .check-label input, .vat-toggle input, .quote-vat input { width: 14px; height: 14px; accent-color: var(--green); }
 
 .sales-core-card, .tracking-card { padding: 14px; }
+.sales-core-date-strip { margin-bottom: 11px; padding-bottom: 11px; border-bottom: 1px solid #e0e9e1; }
 .sales-core-heading { margin-bottom: 10px; }
 .sales-core-heading h2, .tracking-card-header h2 { margin: 0; font-size: 15px; letter-spacing: -0.03em; }
 .sales-core-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
@@ -718,8 +718,6 @@ body {
   .sales-heading-actions, .status-select, .back-button { position: static; }
   .sales-heading-actions, .sales-detail-actions { justify-content: flex-start; }
   .sales-heading h1, .sales-detail-title h1 { font-size: 25px; }
-  .sales-title-tools { width: 100%; justify-content: space-between; }
-  .sales-date-strip { flex: 1 1 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-card { padding: 16px; }
   .form-card-heading { align-items: flex-start; flex-direction: column; }
   .form-card-actions { justify-content: flex-start; }
@@ -733,9 +731,6 @@ body {
 }
 
 @media (max-width: 520px) {
-  .sales-title-tools { align-items: stretch; flex-direction: column; }
-  .sales-date-strip { width: 100%; }
-  .status-select { width: 100%; }
   .sales-core-fields { grid-template-columns: 1fr; }
   .tracking-row-top { grid-template-columns: minmax(0, 1fr) auto; }
   .tracking-status-buttons { grid-column: 1 / -1; grid-row: 2; }

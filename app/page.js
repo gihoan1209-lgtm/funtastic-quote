@@ -910,19 +910,17 @@ export default function QuotePage() {
                 <fieldset disabled={!salesEditMode}>
               <section className="sales-detail-title">
                 <div><p className="eyebrow">SALES RECORD</p><h1>{selectedSale.clientName || '새 영업건'}</h1></div>
-                <div className="sales-title-tools">
-                  <div className="sales-date-strip">
-                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
-                    <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
-                  </div>
-                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
-                    {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
-                  </select>
-                </div>
+                <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
+                  {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
+                </select>
               </section>
 
               <div className="sales-record-overview">
                 <section className="form-card sales-core-card">
+                  <div className="sales-date-strip sales-core-date-strip">
+                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
+                    <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
+                  </div>
                   <div className="sales-core-heading"><h2>거래처 정보</h2></div>
                   <div className="form-fields sales-core-fields">
                     <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
