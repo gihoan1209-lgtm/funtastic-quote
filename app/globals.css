@@ -418,7 +418,7 @@ body {
 .sales-advanced-filters :is(input, select):focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1); }
 .sales-date-range-mark { padding-bottom: 9px; color: var(--text3); font-weight: 700; }
 .sales-table-wrap, .sales-items-wrap { overflow-x: auto; }
-.sales-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 13px; }
+.sales-table { width: 100%; min-width: 1180px; border-collapse: collapse; font-size: 13px; }
 .sales-table th {
   padding: 12px 14px;
   color: var(--text2);
@@ -453,6 +453,14 @@ body {
 }
 .status-draft { color: #5c665e; background: #edf0ed; }
 .status-confirmed { color: #766016; background: #fff4d7; }
+.status-pending { color: #7a5c15; background: #fff4d7; }
+.status-in-progress { color: #176287; background: #e8f5fb; }
+.status-completed { color: #17613d; background: #eaf6ed; }
+.tracking-status-summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; min-width: 96px; }
+.tracking-status-summary .status-badge { min-height: 22px; padding: 3px 6px; font-size: 10px; }
+.status-tracking-before { color: #5c665e; background: #edf0ed; }
+.status-tracking-completed { color: #17613d; background: #eaf6ed; }
+.status-tracking-more { color: var(--text2); background: var(--surface-muted); }
 
 .empty-state { display: grid; justify-items: center; gap: 9px; padding: 72px 20px; text-align: center; }
 .empty-state-icon {

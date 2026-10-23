@@ -120,6 +120,23 @@ const normalizedTrackingRows = (rows, createRow) => (
     : [createRow(1)]
 )
 
+const trackingStatusItems = (rows, type) => {
+  const isShipment = type === 'shipment'
+  const beforeLabel = isShipment ? '출고전' : '입금전'
+  const completedLabel = isShipment ? '출고완료' : '입금완료'
+  const sourceRows = Array.isArray(rows) && rows.length ? rows : [{ id: 'default', status: 'before' }]
+  const items = sourceRows.slice(0, 2).map((row, index) => {
+    const completed = row?.status === 'completed'
+    return {
+      id: String(row?.id ?? index),
+      label: completed ? completedLabel : beforeLabel,
+      className: completed ? 'status-tracking-completed' : 'status-tracking-before',
+    }
+  })
+  if (sourceRows.length > 2) items.push({ id: 'more', label: `+${sourceRows.length - 2}`, className: 'status-tracking-more' })
+  return items
+}
+
 const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
   const createdDate = String(record.createdAt ?? '').slice(0, 10)
@@ -132,7 +149,9 @@ const normalizeSaleRecord = (sale = {}) => {
     taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
     quoteDate: String(record.quoteDate ?? today()),
     requestedDueDate: String(record.requestedDueDate ?? ''),
-    status: record.status === 'confirmed' || record.status === 'issued' ? 'confirmed' : 'draft',
+    status: ['draft', 'confirmed', 'pending', 'inProgress', 'completed'].includes(record.status)
+      ? record.status
+      : record.status === 'issued' ? 'confirmed' : 'draft',
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
     : [createSaleItem(1)],
@@ -163,6 +182,9 @@ const DEFAULT_SUPPLIER = {
 const SALE_STATUS = {
   draft: { label: '작성중', className: 'status-draft' },
   confirmed: { label: '견적 확정', className: 'status-confirmed' },
+  pending: { label: '진행 전', className: 'status-pending' },
+  inProgress: { label: '진행 중', className: 'status-in-progress' },
+  completed: { label: '완료', className: 'status-completed' },
 }
 
 const SALES_DATE_FIELDS = [
@@ -569,6 +591,7 @@ export default function QuotePage() {
   }
 
   const persistSales = (nextSales) => {
+    salesRef.current = nextSales
     setSales(nextSales)
     try {
       window.localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(nextSales))
@@ -603,6 +626,19 @@ export default function QuotePage() {
   const updateSaleField = (field, value) => {
     if (['shippingFee', 'shippingCost'].includes(field) && !nonNegativeInput(value)) return
     updateSelectedSale((sale) => ({ ...sale, [field]: value }))
+  }
+  const updateSaleStatus = (status) => {
+    if (!selectedSaleId || !SALE_STATUS[status]) return
+    if (salesEditMode) {
+      updateSaleField('status', status)
+      return
+    }
+    const updatedAt = new Date().toISOString()
+    const nextSales = salesRef.current.map((sale) => (
+      sale.id === selectedSaleId ? { ...sale, status, updatedAt } : sale
+    ))
+    const saved = persistSales(nextSales)
+    setSalesSaveState(saved ? 'saved' : 'error')
   }
   const updateSaleItem = (itemId, field, value) => {
     if (['qty', 'price', 'cost', 'wholesalePrice'].includes(field) && !nonNegativeInput(value)) return
@@ -1066,7 +1102,7 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>등록일</th><th>상태</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>등록일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
@@ -1075,12 +1111,16 @@ export default function QuotePage() {
                           const profitRate = saleTotals.totalProfitRate
                           const firstItem = quoteItems[0]?.name || '품목 미입력'
                           const status = SALE_STATUS[sale.status] || SALE_STATUS.draft
+                          const shipmentStatuses = trackingStatusItems(sale.shipments, 'shipment')
+                          const paymentStatuses = trackingStatusItems(sale.payments, 'payment')
                           const isSelected = selectedSaleIds.includes(sale.id)
                           return (
                             <tr key={sale.id} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(sale.saleDate)}</td>
                               <td><span className={`status-badge ${status.className}`}>{status.label}</span></td>
+                              <td><div className="tracking-status-summary">{shipmentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
+                              <td><div className="tracking-status-summary">{paymentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
                               <td className="sales-client">{sale.clientName || '거래처 미입력'}</td>
                               <td>{firstItem}</td>
                               <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
@@ -1108,7 +1148,7 @@ export default function QuotePage() {
               <div className="sales-detail-header">
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
-                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태" disabled={!salesEditMode}>
+                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleStatus(event.target.value)} aria-label="영업 상태">
                     {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
                   </select>
                   {salesEditMode ? (
