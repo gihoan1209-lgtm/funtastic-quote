@@ -471,18 +471,23 @@ body {
 
 .sales-detail-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
   align-items: center;
   gap: 16px;
   margin-bottom: 22px;
 }
+.sales-detail-header .back-button { justify-self: start; }
+.sales-detail-status { display: flex; justify-self: center; }
 .sales-detail-actions {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: max-content;
   align-items: center;
   justify-content: end;
+  justify-self: end;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   padding-bottom: 1px;
@@ -496,13 +501,13 @@ body {
   justify-content: center;
   white-space: nowrap;
 }
-.sales-detail-actions .status-select {
+.sales-detail-status .status-select {
   min-width: 118px;
   min-height: 39px;
   height: 39px;
   white-space: nowrap;
 }
-.sales-detail-actions .status-select:disabled {
+.sales-detail-status .status-select:disabled {
   opacity: 1;
   color: var(--green-dark);
   -webkit-text-fill-color: var(--green-dark);
@@ -792,7 +797,15 @@ body {
   .app-tab { height: 38px; padding: 0 10px; }
   .app-tab-active::after { right: 8px; left: 8px; }
   .sales-heading, .sales-detail-title { align-items: flex-start; flex-direction: column; text-align: left; }
-  .sales-detail-header { grid-template-columns: minmax(0, 1fr); align-items: flex-start; text-align: left; }
+  .sales-detail-header {
+    grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .sales-detail-header .back-button { grid-column: 1; grid-row: 1; }
+  .sales-detail-status { grid-column: 2; grid-row: 1; }
+  .sales-detail-actions { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
   .sales-heading-actions, .status-select, .back-button { position: static; }
   .sales-heading-actions { justify-content: flex-start; }
   .sales-detail-actions { width: 100%; justify-content: flex-start; }
@@ -1035,30 +1048,29 @@ body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid #dce8de;
-  border-radius: 8px;
-  background: #fff;
+  gap: 6px 10px;
+  margin-top: 10px;
+  padding: 8px 0 0;
+  border-top: 1px solid #edf0ed;
 }
-.total-shipping-bar > strong { color: var(--text); font-size: 12px; white-space: nowrap; }
+.total-shipping-bar > strong { color: var(--text2); font-size: 11px; white-space: nowrap; }
 .margin-shipping-field { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.margin-shipping-field > span { color: var(--text2); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.margin-shipping-field .input-with-unit { width: 118px; gap: 5px; }
+.margin-shipping-field > span { color: var(--text2); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.margin-shipping-field .input-with-unit { width: 104px; gap: 5px; }
 .margin-shipping-field input {
   width: 100%;
   min-width: 0;
-  min-height: 34px;
-  padding: 6px 8px;
+  min-height: 30px;
+  padding: 4px 6px;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 7px;
   outline: none;
   background: #fff;
+  font-size: 12px;
 }
 .margin-shipping-field input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1); }
-.total-shipping-bar .check-label { min-height: 34px; white-space: nowrap; }
+.total-shipping-bar .check-label { min-height: 30px; color: var(--text2); font-size: 11px; white-space: nowrap; }
 .total-summary-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1084,8 +1096,8 @@ body {
 .total-group-profit { background: #eaf5ed; }
 .total-group-profit h4 { color: var(--green-dark); }
 .total-group-profit .total-line-primary > strong { color: var(--green-dark); font-size: 23px; }
-.sales-readonly .total-shipping-bar input { pointer-events: none; }
-.margin-note, .margin-warning {
+.sales-readonly .total-shipping-bar input { min-height: 30px; padding: 4px 6px; pointer-events: none; }
+.margin-warning {
   margin-top: 11px;
   color: var(--text2);
   font-size: 12px;
