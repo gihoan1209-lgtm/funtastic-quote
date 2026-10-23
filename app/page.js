@@ -122,8 +122,10 @@ const normalizedTrackingRows = (rows, createRow) => (
 
 const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
+  const createdDate = String(record.createdAt ?? '').slice(0, 10)
   return {
     ...record,
+    saleDate: String(record.saleDate || createdDate || record.quoteDate || today()),
     clientName: String(record.clientName ?? ''),
     contactPhone: String(record.contactPhone ?? ''),
     businessRegistrationNumber: String(record.businessRegistrationNumber ?? ''),
@@ -162,6 +164,12 @@ const SALE_STATUS = {
   draft: { label: '작성중', className: 'status-draft' },
   confirmed: { label: '견적 확정', className: 'status-confirmed' },
 }
+
+const SALES_DATE_FIELDS = [
+  { value: 'saleDate', label: '등록일' },
+  { value: 'quoteDate', label: '견적일' },
+  { value: 'requestedDueDate', label: '납기 희망일' },
+]
 
 const SALES_SAVE_STATUS = {
   dirty: { label: '저장 필요', className: 'sales-save-status-dirty' },
@@ -252,6 +260,11 @@ export default function QuotePage() {
   const [selectedSaleId, setSelectedSaleId] = useState('')
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
+  const [salesAdvancedSearchOpen, setSalesAdvancedSearchOpen] = useState(false)
+  const [salesDateField, setSalesDateField] = useState('saleDate')
+  const [salesDateFrom, setSalesDateFrom] = useState('')
+  const [salesDateTo, setSalesDateTo] = useState('')
+  const [selectedSaleIds, setSelectedSaleIds] = useState([])
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
   const [salesHydrated, setSalesHydrated] = useState(false)
@@ -265,6 +278,7 @@ export default function QuotePage() {
   const costFileInputRef = useRef(null)
   const salesRef = useRef([])
   const appViewRef = useRef(null)
+  const selectAllSalesRef = useRef(null)
 
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
@@ -301,14 +315,61 @@ export default function QuotePage() {
     const query = salesSearch.trim().toLocaleLowerCase('ko-KR')
     return sales.filter((sale) => {
       const matchesStatus = salesStatusFilter === 'all' || sale.status === salesStatusFilter
-      const firstItem = sale.items?.find((item) => item.name?.trim())?.name || ''
-      const matchesSearch = !query || [sale.clientName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, firstItem]
+      const itemSearchTerms = (sale.items || []).flatMap((item) => [item?.name, item?.productCode, item?.spec])
+      const matchesSearch = !query || [sale.clientName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, ...itemSearchTerms]
         .join(' ')
         .toLocaleLowerCase('ko-KR')
         .includes(query)
-      return matchesStatus && matchesSearch
+      const dateValue = String(sale?.[salesDateField] ?? '')
+      const matchesStartDate = !salesDateFrom || (dateValue && dateValue >= salesDateFrom)
+      const matchesEndDate = !salesDateTo || (dateValue && dateValue <= salesDateTo)
+      return matchesStatus && matchesSearch && matchesStartDate && matchesEndDate
     })
-  }, [sales, salesSearch, salesStatusFilter])
+  }, [sales, salesDateField, salesDateFrom, salesDateTo, salesSearch, salesStatusFilter])
+
+  const selectedSales = useMemo(
+    () => sales.filter((sale) => selectedSaleIds.includes(sale.id)),
+    [sales, selectedSaleIds],
+  )
+  const allFilteredSalesSelected = filteredSales.length > 0 && filteredSales.every((sale) => selectedSaleIds.includes(sale.id))
+  const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
+  const hasSalesFilters = Boolean(salesSearch.trim() || salesStatusFilter !== 'all' || salesDateFrom || salesDateTo)
+
+  useEffect(() => {
+    if (selectAllSalesRef.current) {
+      selectAllSalesRef.current.indeterminate = someFilteredSalesSelected && !allFilteredSalesSelected
+    }
+  }, [allFilteredSalesSelected, someFilteredSalesSelected])
+
+  useEffect(() => {
+    const saleIdSet = new Set(sales.map((sale) => sale.id))
+    setSelectedSaleIds((current) => {
+      const next = current.filter((saleId) => saleIdSet.has(saleId))
+      return next.length === current.length ? current : next
+    })
+  }, [sales])
+
+  const toggleSaleSelection = (saleId) => {
+    setSelectedSaleIds((current) => (
+      current.includes(saleId) ? current.filter((currentId) => currentId !== saleId) : [...current, saleId]
+    ))
+  }
+
+  const toggleAllFilteredSales = () => {
+    const visibleIds = filteredSales.map((sale) => sale.id)
+    setSelectedSaleIds((current) => {
+      if (visibleIds.every((saleId) => current.includes(saleId))) return current.filter((saleId) => !visibleIds.includes(saleId))
+      return [...new Set([...current, ...visibleIds])]
+    })
+  }
+
+  const resetSalesFilters = () => {
+    setSalesSearch('')
+    setSalesStatusFilter('all')
+    setSalesDateField('saleDate')
+    setSalesDateFrom('')
+    setSalesDateTo('')
+  }
 
   const writeAppHistory = useCallback((navigation, mode = 'push') => {
     if (typeof window === 'undefined') return
@@ -758,8 +819,9 @@ export default function QuotePage() {
     showSalesList()
   }
 
-  const downloadSalesList = () => {
-    const rows = salesRowsForExport(filteredSales)
+  const downloadSalesList = (scope = 'selected') => {
+    const salesToExport = scope === 'all' ? sales : selectedSales
+    const rows = salesRowsForExport(salesToExport)
     if (!rows.length) {
       window.alert('다운로드할 품목이 없습니다.')
       return
@@ -773,7 +835,7 @@ export default function QuotePage() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `영업목록_${today().replaceAll('-', '')}.xlsx`
+      link.download = `${scope === 'all' ? '전체영업목록' : '선택영업목록'}_${today().replaceAll('-', '')}.xlsx`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -975,8 +1037,9 @@ export default function QuotePage() {
                   <p>거래처와 품목을 관리하고, 확정된 내용을 견적서로 바로 보냅니다.</p>
                 </div>
                 <div className="sales-heading-actions">
-                  <button className="btn-light" onClick={downloadSalesList}>엑셀 다운로드</button>
-                  <button className="button-primary" onClick={openNewSale}>+ 새 영업건</button>
+                  <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('selected')} disabled={!selectedSales.length}>선택 엑셀 다운로드 ({selectedSales.length})</button>
+                  <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('all')} disabled={!sales.length}>전체 엑셀 다운로드</button>
+                  <button className="button-primary sales-heading-action" onClick={openNewSale}>+ 새 영업건</button>
                 </div>
               </section>
 
@@ -987,22 +1050,35 @@ export default function QuotePage() {
                     <option value="all">전체 상태</option>
                     {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
                   </select>
-                  <span className="sales-count">{filteredSales.length}건</span>
+                  <button type="button" className={`btn-light sales-filter-toggle${salesAdvancedSearchOpen ? ' is-active' : ''}`} onClick={() => setSalesAdvancedSearchOpen((current) => !current)} aria-expanded={salesAdvancedSearchOpen}>상세 검색</button>
+                  {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
+                  <span className="sales-count">{filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
                 </div>
+                {salesAdvancedSearchOpen && (
+                  <div className="sales-advanced-filters">
+                    <label className="field sales-date-filter"><span>일자 기준</span><select value={salesDateField} onChange={(event) => setSalesDateField(event.target.value)}>{SALES_DATE_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></label>
+                    <label className="field sales-date-filter"><span>시작일</span><input type="date" value={salesDateFrom} onClick={openNativeDatePicker} onChange={(event) => setSalesDateFrom(event.target.value)} /></label>
+                    <span className="sales-date-range-mark">~</span>
+                    <label className="field sales-date-filter"><span>종료일</span><input type="date" value={salesDateTo} onClick={openNativeDatePicker} onChange={(event) => setSalesDateTo(event.target.value)} /></label>
+                  </div>
+                )}
 
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th>등록일</th><th>상태</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적 합계</th><th>총순이익</th><th></th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>등록일</th><th>상태</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
                           const saleTotals = calculateSaleTotals(sale)
                           const profit = saleTotals.totalProfit
+                          const profitRate = saleTotals.totalProfitRate
                           const firstItem = quoteItems[0]?.name || '품목 미입력'
                           const status = SALE_STATUS[sale.status] || SALE_STATUS.draft
+                          const isSelected = selectedSaleIds.includes(sale.id)
                           return (
                             <tr key={sale.id} onClick={() => openSale(sale.id)}>
+                              <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(sale.saleDate)}</td>
                               <td><span className={`status-badge ${status.className}`}>{status.label}</span></td>
                               <td className="sales-client">{sale.clientName || '거래처 미입력'}</td>
@@ -1010,7 +1086,7 @@ export default function QuotePage() {
                               <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
                               <td className="amount">{money(saleTotals.totalGross)}</td>
                               <td className={`amount ${profit != null && profit < 0 ? 'amount-negative' : ''}`}>{money(profit)}</td>
-                              <td className="sales-row-action"><button className="table-link" onClick={(event) => { event.stopPropagation(); openQuoteForSale(sale) }}>{sale.quoteId ? '견적서 편집' : '견적서 작성'}</button></td>
+                              <td className={`amount ${profitRate != null && profitRate < 0 ? 'amount-negative' : ''}`}>{percent(profitRate)}</td>
                             </tr>
                           )
                         })}
@@ -1032,6 +1108,9 @@ export default function QuotePage() {
               <div className="sales-detail-header">
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
+                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태" disabled={!salesEditMode}>
+                    {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
+                  </select>
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
@@ -1040,7 +1119,7 @@ export default function QuotePage() {
                     </>
                   ) : <button className="btn-light" onClick={() => { setSalesEditMode(true); setSalesSaveState('idle') }}>편집</button>}
                   {salesSaveState !== 'idle' && <span className={`sales-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
-                  <button className="button-primary" onClick={() => openQuoteForSale(selectedSale)}>견적서 작성</button>
+                  <button className="button-primary" onClick={() => openQuoteForSale(selectedSale)}>견적서 열기</button>
                 </div>
               </div>
 
@@ -1048,9 +1127,6 @@ export default function QuotePage() {
                 <fieldset disabled={!salesEditMode}>
               <section className="sales-detail-title">
                 <div><p className="eyebrow">SALES RECORD</p><h1>{selectedSale.clientName || '새 영업건'}</h1></div>
-                <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
-                  {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
-                </select>
               </section>
 
               <div className="sales-record-overview">
@@ -1120,7 +1196,7 @@ export default function QuotePage() {
 
               <section className="form-card items-card">
                 <div className="form-card-heading">
-                  <div><h2>품목 및 개당 마진</h2><p>품명·옵션·수량·공급가만 견적서로 넘어가며, 원가와 이익은 내부에서만 보입니다.</p></div>
+                  <div><h2>품목 정보</h2><p>품명·옵션·수량·공급가만 견적서로 넘어가며, 원가와 이익은 내부에서만 보입니다.</p></div>
                   <div className="form-card-actions">
                     <button type="button" className="btn-light" onClick={addSaleItem}>+ 빈 품목 추가</button>
                     <button type="button" className="btn-light" onClick={addSaleItemFromPrevious}>+ 위 품목과 동일하게 추가</button>
@@ -1218,22 +1294,19 @@ export default function QuotePage() {
                 </div>
                 <div className="margin-summary">
                   <div className="margin-summary-heading">
-                    <div><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
-                    <div className="margin-shipping-inline">
-                      <strong>배송비</strong>
-                      <label className="margin-shipping-field"><span>받은 배송비 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
-                      <label className="margin-shipping-field"><span>실 배송비 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
-                      <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
-                      <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
-                    </div>
+                    <div><h3>TOTAL</h3><span>견적 금액과 비용을 기준으로 자동 계산됩니다</span></div>
                   </div>
-                  <div className="margin-summary-grid">
-                    <div className="margin-metric"><span>총 매출</span><strong>{money(selectedSaleTotals.totalGross)}</strong></div>
-                    <div className="margin-metric"><span>총 원가</span><strong>{money(selectedSaleTotals.totalCost)}</strong></div>
-                    <div className="margin-metric"><span>총 순이익</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
-                    <div className="margin-metric"><span>총 매출부가세</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
-                    <div className="margin-metric"><span>총 순이익률</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
-                    <div className="margin-metric"><span>배송비 (받은 배송비−실 배송비)</span><strong className={selectedSaleShippingNet != null && selectedSaleShippingNet < 0 ? 'amount-negative' : ''}>{money(selectedSaleShippingNet)}</strong></div>
+                  <div className="total-shipping-bar">
+                    <strong>배송비 설정</strong>
+                    <label className="margin-shipping-field"><span>받은 배송비 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                    <label className="margin-shipping-field"><span>실 배송비 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                    <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
+                    <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
+                  </div>
+                  <div className="total-summary-groups">
+                    <section className="total-group total-group-sales"><h4>매출</h4><div className="total-line"><span>견적합계</span><strong>{money(selectedSaleTotals.totalGross)}</strong></div><div className="total-line"><span>매출 부가세</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div></section>
+                    <section className="total-group total-group-cost"><h4>비용</h4><div className="total-line"><span>총 원가</span><strong>{money(selectedSaleTotals.totalCost)}</strong></div><div className="total-line"><span>배송비 차액 <small>(받은−실)</small></span><strong className={selectedSaleShippingNet != null && selectedSaleShippingNet < 0 ? 'amount-negative' : ''}>{money(selectedSaleShippingNet)}</strong></div></section>
+                    <section className="total-group total-group-profit"><h4>마진</h4><div className="total-line total-line-primary"><span>총 순이익</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div><div className="total-line"><span>순이익률</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div></section>
                   </div>
                   <p className="margin-note">품목과 배송비의 금액·부가세는 견적 금액과 맞추기 위해 원 단위로 반올림합니다.</p>
                   {selectedSaleTotals.totalProfit == null && <p className="margin-warning">순이익을 계산하려면 모든 품목의 공급가·수량·원가와 실 배송비를 0 이상으로 입력해 주세요. 받은 배송비를 반영할 때도 금액이 필요합니다. 비용이 없으면 0을 입력하세요.</p>}
