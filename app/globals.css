@@ -1007,10 +1007,11 @@ body {
 .sales-margin-table th:first-child, .sales-margin-table td:first-child { border-left: 1px solid #dce5ed; }
 .sales-margin-table thead th { font-weight: 800; }
 .sales-margin-group-row th {
-  padding: 13px 8px;
+  padding: 12px 8px;
   color: #fff;
   background: #1f2421;
-  font-size: 14px;
+  font-size: 18px;
+  line-height: 18px;
 }
 .sales-margin-group-product, .sales-margin-group-purchase, .sales-margin-group-sales { color: #fff !important; background: #1f2421 !important; }
 .sales-margin-group-profit { color: #fff !important; background: #d9573f !important; }
