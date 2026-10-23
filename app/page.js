@@ -16,6 +16,31 @@ const SALES_STORAGE_KEY = 'funtastic-sales-history'
 const SALES_ACTIVE_VIEW_STORAGE_KEY = 'funtastic-sales-active-view'
 const COST_CATALOG_STORAGE_KEY = 'funtastic-cost-catalog'
 const COST_CATALOG_PAGE_SIZE = 100
+const APP_HISTORY_STATE_KEY = '__funtasticQuoteNavigation'
+const APP_HISTORY_VERSION = 1
+const APP_TABS = ['sales', 'quote', 'costs']
+
+const createAppNavigation = ({ tab = 'sales', salesView = 'list', selectedSaleId = '' } = {}) => {
+  const resolvedTab = APP_TABS.includes(tab) ? tab : 'sales'
+  const canOpenSale = resolvedTab === 'sales' && salesView === 'edit' && typeof selectedSaleId === 'string' && selectedSaleId
+  return {
+    version: APP_HISTORY_VERSION,
+    tab: resolvedTab,
+    salesView: canOpenSale ? 'edit' : 'list',
+    selectedSaleId: canOpenSale ? selectedSaleId : '',
+  }
+}
+
+const isAppNavigation = (navigation) => (
+  navigation?.version === APP_HISTORY_VERSION && APP_TABS.includes(navigation?.tab)
+)
+
+const sameAppNavigation = (left, right) => (
+  left?.version === right?.version
+  && left?.tab === right?.tab
+  && left?.salesView === right?.salesView
+  && left?.selectedSaleId === right?.selectedSaleId
+)
 
 const today = () => new Date().toISOString().slice(0, 10)
 const comma = (value) => Math.round(Number(value) || 0).toLocaleString('ko-KR')
@@ -238,6 +263,8 @@ export default function QuotePage() {
   const [costCatalogMessage, setCostCatalogMessage] = useState('')
   const [catalogSearchOpenItemId, setCatalogSearchOpenItemId] = useState('')
   const costFileInputRef = useRef(null)
+  const salesRef = useRef([])
+  const appViewRef = useRef(null)
 
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
@@ -249,6 +276,9 @@ export default function QuotePage() {
   const [savedQuotes, setSavedQuotes] = useState([])
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [linkedSaleId, setLinkedSaleId] = useState('')
+
+  salesRef.current = sales
+  appViewRef.current = { activeTab, salesView, selectedSaleId, salesSaveState }
 
   const selectedSale = sales.find((sale) => sale.id === selectedSaleId)
   const linkedSale = sales.find((sale) => sale.id === linkedSaleId)
@@ -280,6 +310,65 @@ export default function QuotePage() {
     })
   }, [sales, salesSearch, salesStatusFilter])
 
+  const writeAppHistory = useCallback((navigation, mode = 'push') => {
+    if (typeof window === 'undefined') return
+    const nextNavigation = createAppNavigation(navigation)
+    try {
+      const currentState = window.history.state || {}
+      const currentNavigation = currentState[APP_HISTORY_STATE_KEY]
+      if (mode === 'push' && sameAppNavigation(currentNavigation, nextNavigation)) return
+      const nextState = { ...currentState, [APP_HISTORY_STATE_KEY]: nextNavigation }
+      if (mode === 'replace') {
+        window.history.replaceState(nextState, '', window.location.href)
+      } else {
+        window.history.pushState(nextState, '', window.location.href)
+      }
+    } catch {
+      // Browser history is optional. The in-app navigation controls still work without it.
+    }
+  }, [])
+
+  const applyAppNavigation = useCallback((navigation, saleRecords = salesRef.current) => {
+    const requested = isAppNavigation(navigation) ? createAppNavigation(navigation) : createAppNavigation()
+    const canOpenSale = requested.tab === 'sales' && requested.salesView === 'edit'
+      && saleRecords.some((sale) => sale.id === requested.selectedSaleId)
+    const resolved = canOpenSale ? requested : createAppNavigation({ tab: requested.tab })
+
+    setActiveTab(resolved.tab)
+    if (resolved.tab === 'sales') {
+      setSalesView(resolved.salesView)
+      setSelectedSaleId(resolved.selectedSaleId)
+    }
+    setSalesEditMode(false)
+    setCatalogSearchOpenItemId('')
+    return resolved
+  }, [])
+
+  const showSalesList = (historyMode = 'replace') => {
+    setCatalogSearchOpenItemId('')
+    setSalesEditMode(false)
+    setSelectedSaleId('')
+    setSalesView('list')
+    setActiveTab('sales')
+    writeAppHistory({ tab: 'sales' }, historyMode)
+  }
+
+  const selectAppTab = (tab) => {
+    const keepOpenSale = tab === 'sales' && salesView === 'edit' && selectedSaleId
+      && sales.some((sale) => sale.id === selectedSaleId)
+    const navigation = createAppNavigation({
+      tab,
+      salesView: keepOpenSale ? 'edit' : 'list',
+      selectedSaleId: keepOpenSale ? selectedSaleId : '',
+    })
+    setActiveTab(navigation.tab)
+    if (navigation.tab === 'sales' && navigation.salesView === 'list') {
+      setSalesView('list')
+      setSelectedSaleId('')
+    }
+    writeAppHistory(navigation)
+  }
+
   useLayoutEffect(() => {
     const resizeAll = () => document.querySelectorAll('textarea[data-autosize="true"]').forEach(resizeTextArea)
     resizeAll()
@@ -302,16 +391,15 @@ export default function QuotePage() {
     } catch {
       setSales([])
     }
+    salesRef.current = loadedSales
+
+    let savedNavigation = null
     try {
       const savedView = JSON.parse(window.sessionStorage.getItem(SALES_ACTIVE_VIEW_STORAGE_KEY) || 'null')
       const selectedId = typeof savedView?.selectedSaleId === 'string' ? savedView.selectedSaleId : ''
       if (savedView?.version === 1 && savedView?.tab === 'sales' && selectedId
         && loadedSales.some((sale) => sale.id === selectedId)) {
-        setActiveTab('sales')
-        setSelectedSaleId(selectedId)
-        setSalesView('edit')
-        setSalesEditMode(false)
-        setSalesSaveState('idle')
+        savedNavigation = createAppNavigation({ tab: 'sales', salesView: 'edit', selectedSaleId: selectedId })
       } else {
         window.sessionStorage.removeItem(SALES_ACTIVE_VIEW_STORAGE_KEY)
       }
@@ -329,8 +417,57 @@ export default function QuotePage() {
       setCostCatalog([])
       setCostCatalogMeta(null)
     }
+
+    const currentNavigation = window.history.state?.[APP_HISTORY_STATE_KEY]
+    if (isAppNavigation(currentNavigation)) {
+      const resolved = applyAppNavigation(currentNavigation, loadedSales)
+      if (!sameAppNavigation(currentNavigation, resolved)) writeAppHistory(resolved, 'replace')
+    } else {
+      const listNavigation = createAppNavigation({ tab: 'sales' })
+      writeAppHistory(listNavigation, 'replace')
+      if (savedNavigation) {
+        applyAppNavigation(savedNavigation, loadedSales)
+        writeAppHistory(savedNavigation)
+      } else {
+        applyAppNavigation(listNavigation, loadedSales)
+      }
+    }
+
+    const handlePopState = (event) => {
+      const currentView = appViewRef.current
+      const targetNavigation = isAppNavigation(event.state?.[APP_HISTORY_STATE_KEY])
+        ? createAppNavigation(event.state[APP_HISTORY_STATE_KEY])
+        : createAppNavigation()
+      const currentNavigation = createAppNavigation({
+        tab: currentView?.activeTab,
+        salesView: currentView?.salesView,
+        selectedSaleId: currentView?.selectedSaleId,
+      })
+      const isLeavingDirtySale = currentView?.activeTab === 'sales'
+        && currentView.salesView === 'edit'
+        && currentView.salesSaveState === 'dirty'
+        && !sameAppNavigation(currentNavigation, targetNavigation)
+
+      if (isLeavingDirtySale) {
+        const shouldSave = window.confirm('저장하지 않은 변경사항이 있습니다.\n\n확인: 저장 후 이전 화면으로 이동\n취소: 현재 화면에 머무르기')
+        if (!shouldSave) {
+          writeAppHistory(currentNavigation)
+          return
+        }
+        const saved = persistSales(salesRef.current)
+        setSalesSaveState(saved ? 'saved' : 'error')
+        if (!saved) {
+          writeAppHistory(currentNavigation)
+          return
+        }
+      }
+
+      applyAppNavigation(event.state?.[APP_HISTORY_STATE_KEY], salesRef.current)
+    }
+    window.addEventListener('popstate', handlePopState)
     setSalesHydrated(true)
-  }, [])
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [applyAppNavigation, writeAppHistory])
 
   useEffect(() => {
     if (!salesHydrated) return
@@ -584,6 +721,7 @@ export default function QuotePage() {
     setSelectedSaleId(sale.id)
     setSalesView('edit')
     setActiveTab('sales')
+    writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
 
   const openSale = (saleId) => {
@@ -593,6 +731,7 @@ export default function QuotePage() {
     setSelectedSaleId(saleId)
     setSalesView('edit')
     setActiveTab('sales')
+    writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: saleId })
   }
 
   const saveSale = () => {
@@ -616,9 +755,7 @@ export default function QuotePage() {
       setSalesSaveState(saved ? 'saved' : 'error')
       if (!saved) return
     }
-    setCatalogSearchOpenItemId('')
-    setSalesEditMode(false)
-    setSalesView('list')
+    showSalesList()
   }
 
   const downloadSalesList = () => {
@@ -651,8 +788,7 @@ export default function QuotePage() {
     if (!window.confirm(`${selectedSale.clientName || '이 영업건'}을(를) 삭제할까요? 연결된 견적서는 유지됩니다.`)) return
     persistSales(sales.filter((sale) => sale.id !== selectedSale.id))
     persistQuotes(savedQuotes.map((quote) => quote.salesId === selectedSale.id ? { ...quote, salesId: null } : quote))
-    setSelectedSaleId('')
-    setSalesView('list')
+    showSalesList()
   }
 
   const applyQuoteData = (quote) => {
@@ -712,6 +848,7 @@ export default function QuotePage() {
       setLinkedSaleId(sale.id)
     }
     setActiveTab('quote')
+    writeAppHistory({ tab: 'quote' })
   }
 
   const createBlankQuote = () => {
@@ -724,6 +861,7 @@ export default function QuotePage() {
     setSelectedQuoteId('')
     setLinkedSaleId('')
     setActiveTab('quote')
+    writeAppHistory({ tab: 'quote' })
   }
 
   const saveQuote = () => {
@@ -812,9 +950,9 @@ export default function QuotePage() {
         <div className="toolbar-left">
           <div className="toolbar-logo">펀타 영업·견적</div>
           <nav className="app-tabs" aria-label="주요 메뉴">
-            <button className={`app-tab ${activeTab === 'sales' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('sales')}>영업관리</button>
-            <button className={`app-tab ${activeTab === 'quote' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('quote')}>견적서</button>
-            <button className={`app-tab ${activeTab === 'costs' ? 'app-tab-active' : ''}`} onClick={() => setActiveTab('costs')}>원가관리</button>
+            <button className={`app-tab ${activeTab === 'sales' ? 'app-tab-active' : ''}`} onClick={() => selectAppTab('sales')}>영업관리</button>
+            <button className={`app-tab ${activeTab === 'quote' ? 'app-tab-active' : ''}`} onClick={() => selectAppTab('quote')}>견적서</button>
+            <button className={`app-tab ${activeTab === 'costs' ? 'app-tab-active' : ''}`} onClick={() => selectAppTab('costs')}>원가관리</button>
           </nav>
         </div>
         {activeTab === 'quote'
@@ -916,21 +1054,19 @@ export default function QuotePage() {
               </section>
 
               <div className="sales-record-overview">
-                <div className="sales-client-stack">
-                  <div className="sales-date-strip sales-client-date-strip">
+                <section className="form-card sales-core-card">
+                  <div className="sales-date-strip sales-core-date-strip">
                     <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
                     <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                   </div>
-                  <section className="form-card sales-core-card">
-                    <div className="sales-core-heading"><h2>거래처 정보</h2></div>
-                    <div className="form-fields sales-core-fields">
-                      <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
-                      <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
-                      <label className="field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
-                      <label className="field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
-                    </div>
-                  </section>
-                </div>
+                  <div className="sales-core-heading"><h2>거래처 정보</h2></div>
+                  <div className="form-fields sales-core-fields">
+                    <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
+                    <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
+                    <label className="field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
+                    <label className="field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
+                  </div>
+                </section>
 
                 <section className="form-card tracking-card">
                   <div className="tracking-card-header">
@@ -943,7 +1079,6 @@ export default function QuotePage() {
                         {selectedSale.shipments.map((shipment, index) => (
                           <div className="tracking-row tracking-shipment-row" key={shipment.id}>
                             <div className="tracking-row-top">
-                              <strong className="tracking-row-label">출고 {index + 1}</strong>
                               <div className="tracking-status-buttons" role="group" aria-label={`출고 ${index + 1} 상태`}>
                                 <button type="button" aria-pressed={shipment.status === 'before'} className={`tracking-status-button tracking-status-before ${shipment.status === 'before' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
                                 <button type="button" aria-pressed={shipment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${shipment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
@@ -965,7 +1100,6 @@ export default function QuotePage() {
                         {selectedSale.payments.map((payment, index) => (
                           <div className="tracking-row tracking-payment-row" key={payment.id}>
                             <div className="tracking-row-top">
-                              <strong className="tracking-row-label">입금 {index + 1}</strong>
                               <div className="tracking-status-buttons" role="group" aria-label={`입금 ${index + 1} 상태`}>
                                 <button type="button" aria-pressed={payment.status === 'before'} className={`tracking-status-button tracking-status-before ${payment.status === 'before' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
                                 <button type="button" aria-pressed={payment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${payment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
@@ -1021,7 +1155,7 @@ export default function QuotePage() {
                         <th>수량 <em>*</em></th>
                         <th>개당 원가</th>
                         <th>도매가</th>
-                        <th>공급가 / 견적 단가 <em>*</em></th>
+                        <th>공급가 <em>*</em></th>
                         <th>할인율</th>
                         <th>매출 부가세</th>
                         <th>개당 순이익</th>
@@ -1114,7 +1248,7 @@ export default function QuotePage() {
               </div>
             </>
           ) : (
-            <div className="empty-state"><h2>영업건을 찾을 수 없습니다.</h2><button className="button-primary" onClick={() => setSalesView('list')}>목록으로 이동</button></div>
+            <div className="empty-state"><h2>영업건을 찾을 수 없습니다.</h2><button className="button-primary" onClick={() => showSalesList()}>목록으로 이동</button></div>
           )}
         </main>
       ) : activeTab === 'costs' ? (
@@ -1212,7 +1346,7 @@ export default function QuotePage() {
           {linkedSale && (
             <div className="linked-sale-banner no-print">
               <div><span>연결된 영업건</span><strong>{linkedSale.clientName || '거래처 미입력'}</strong><small>{SALE_STATUS[linkedSale.status]?.label || '작성중'} · 견적서에서 수정한 거래처와 품목은 영업관리 정보에 자동 반영되지 않습니다.</small></div>
-              <button className="btn-light" onClick={() => { setSelectedSaleId(linkedSale.id); setSalesView('edit'); setActiveTab('sales') }}>영업건 열기</button>
+              <button className="btn-light" onClick={() => openSale(linkedSale.id)}>영업건 열기</button>
             </div>
           )}
 
