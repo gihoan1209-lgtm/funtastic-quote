@@ -479,7 +479,11 @@ body {
 .check-label input, .vat-toggle input, .quote-vat input { width: 14px; height: 14px; accent-color: var(--green); }
 
 .sales-core-card, .tracking-card { padding: 14px; }
-.sales-core-date-strip { margin-bottom: 11px; padding-bottom: 11px; border-bottom: 1px solid #e0e9e1; }
+.sales-client-stack { display: grid; min-width: 0; align-content: start; gap: 8px; }
+.sales-client-date-strip { width: min(100%, 296px); grid-template-columns: repeat(2, minmax(0, 145px)); gap: 6px; }
+.sales-client-date-strip .field { gap: 3px; }
+.sales-client-date-strip .field > span { font-size: 11px; }
+.sales-client-date-strip input { min-height: 32px; padding: 5px 8px; font-size: 12px; }
 .sales-core-heading { margin-bottom: 10px; }
 .sales-core-heading h2, .tracking-card-header h2 { margin: 0; font-size: 15px; letter-spacing: -0.03em; }
 .sales-core-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
@@ -982,6 +986,7 @@ body {
   border: 1px solid #e2ebe2;
   background: #fff;
 }
+.margin-summary-grid .margin-metric { justify-content: flex-start; gap: 10px; }
 .margin-note, .margin-warning {
   margin-top: 11px;
   color: var(--text2);
