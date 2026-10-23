@@ -245,6 +245,9 @@ export default function QuotePage() {
   const linkedSale = sales.find((sale) => sale.id === linkedSaleId)
   const totals = useMemo(() => calculateQuoteTotals(items), [items])
   const selectedSaleTotals = selectedSale ? calculateSaleTotals(selectedSale) : null
+  const selectedSaleShippingNet = selectedSaleTotals?.shippingGross != null && selectedSaleTotals?.shippingCost != null
+    ? selectedSaleTotals.shippingGross - selectedSaleTotals.shippingCost
+    : null
 
   const filteredCostCatalog = useMemo(() => {
     if (!costCatalogSearch.trim()) return costCatalog
@@ -903,55 +906,61 @@ export default function QuotePage() {
                 </select>
               </section>
 
-              <div className="sales-form-grid">
-                <section className="form-card">
-                  <h2>거래처 정보</h2>
-                  <div className="form-fields two-columns">
-                    <label className="field field-wide"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
-                    <label className="field"><span>담당자명</span><input value={selectedSale.contactName} onChange={(event) => updateSaleField('contactName', event.target.value)} placeholder="담당자 이름" /></label>
-                    <label className="field"><span>연락처</span><input value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" /></label>
-                    <label className="field"><span>영업 등록일</span><input type="date" value={selectedSale.saleDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('saleDate', event.target.value)} /></label>
-                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
-                    <label className="field"><span>수신 표기</span><input value={selectedSale.recipientTitle} onChange={(event) => updateSaleField('recipientTitle', event.target.value)} placeholder="대표이사 귀하" /></label>
+              <div className="sales-record-overview">
+                <section className="form-card sales-core-card">
+                  <div className="sales-core-bar">
+                    <div className="sales-core-label"><h2>거래처 정보</h2><p>견적서에 쓰이는 거래처와 견적일만 관리합니다.</p></div>
+                    <div className="form-fields sales-core-fields">
+                      <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
+                      <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
+                    </div>
                   </div>
                 </section>
 
                 <section className="form-card tracking-card">
-                  <div className="form-card-heading">
-                    <div><h2>출고 · 입금 관리</h2><p>부분 출고와 부분 입금은 행을 추가해 따로 기록하세요.</p></div>
+                  <div className="tracking-card-header">
+                    <div><h2>출고 · 입금 관리</h2><p>부분 출고와 부분 입금은 각 영역에서 행을 추가해 따로 기록하세요.</p></div>
+                    <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                   </div>
-                  <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                   <div className="tracking-stack">
-                    <section className="tracking-section">
+                    <section className="tracking-section tracking-shipment-section">
                       <div className="tracking-section-heading"><h3>출고</h3><button type="button" className="btn-light" onClick={addShipment}>+ 출고 추가</button></div>
                       <div className="tracking-list">
                         {selectedSale.shipments.map((shipment, index) => (
-                          <div className="tracking-row" key={shipment.id}>
-                            <strong className="tracking-row-label">출고 {index + 1}</strong>
-                            <div className="tracking-status-buttons" role="group" aria-label={`출고 ${index + 1} 상태`}>
-                              <button type="button" className={`tracking-status-button ${shipment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
-                              <button type="button" className={`tracking-status-button ${shipment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
+                          <div className="tracking-row tracking-shipment-row" key={shipment.id}>
+                            <div className="tracking-row-top">
+                              <strong className="tracking-row-label">출고 {index + 1}</strong>
+                              <div className="tracking-status-buttons" role="group" aria-label={`출고 ${index + 1} 상태`}>
+                                <button type="button" aria-pressed={shipment.status === 'before'} className={`tracking-status-button tracking-status-before ${shipment.status === 'before' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
+                                <button type="button" aria-pressed={shipment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${shipment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
+                              </div>
+                              <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
                             </div>
-                            <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onClick={openNativeDatePicker} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
-                            <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
+                            <div className="tracking-row-fields">
+                              <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onClick={openNativeDatePicker} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </section>
 
-                    <section className="tracking-section">
+                    <section className="tracking-section tracking-payment-section">
                       <div className="tracking-section-heading"><h3>입금</h3><button type="button" className="btn-light" onClick={addPayment}>+ 입금 추가</button></div>
                       <div className="tracking-list">
                         {selectedSale.payments.map((payment, index) => (
                           <div className="tracking-row tracking-payment-row" key={payment.id}>
-                            <strong className="tracking-row-label">입금 {index + 1}</strong>
-                            <div className="tracking-status-buttons" role="group" aria-label={`입금 ${index + 1} 상태`}>
-                              <button type="button" className={`tracking-status-button ${payment.status === 'before' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
-                              <button type="button" className={`tracking-status-button ${payment.status === 'completed' ? 'tracking-status-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
+                            <div className="tracking-row-top">
+                              <strong className="tracking-row-label">입금 {index + 1}</strong>
+                              <div className="tracking-status-buttons" role="group" aria-label={`입금 ${index + 1} 상태`}>
+                                <button type="button" aria-pressed={payment.status === 'before'} className={`tracking-status-button tracking-status-before ${payment.status === 'before' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
+                                <button type="button" aria-pressed={payment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${payment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
+                              </div>
+                              <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>
                             </div>
-                            <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(payment.amount)} onChange={(event) => updatePayment(payment.id, 'amount', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
-                            <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onClick={openNativeDatePicker} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
-                            <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>
+                            <div className="tracking-row-fields tracking-payment-fields">
+                              <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(payment.amount)} onChange={(event) => updatePayment(payment.id, 'amount', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                              <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onClick={openNativeDatePicker} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -971,12 +980,13 @@ export default function QuotePage() {
                 <div className={`sales-margin-table-wrap${catalogSearchOpenItemId ? ' sales-margin-table-lookup-open' : ''}`}>
                   <table className="sales-margin-table">
                     <colgroup>
-                      <col className="sales-margin-product-col" />
+                      <col className="sales-margin-code-col" />
+                      <col className="sales-margin-name-col" />
+                      <col className="sales-margin-option-col" />
                       <col className="sales-margin-quantity-col" />
                       <col className="sales-margin-cost-col" />
                       <col className="sales-margin-wholesale-col" />
                       <col className="sales-margin-price-col" />
-                      <col className="sales-margin-vat-col" />
                       <col className="sales-margin-discount-col" />
                       <col className="sales-margin-sales-vat-col" />
                       <col className="sales-margin-profit-col" />
@@ -984,18 +994,19 @@ export default function QuotePage() {
                     </colgroup>
                     <thead>
                       <tr className="sales-margin-group-row">
-                        <th className="sales-margin-group-product">상품 정보</th>
-                        <th colSpan={2} className="sales-margin-group-purchase">매입</th>
-                        <th colSpan={4} className="sales-margin-group-sales">판매 조건</th>
-                        <th colSpan={3} className="sales-margin-group-profit">예상 수익</th>
+                        <th colSpan={3} className="sales-margin-group-product">상품 정보</th>
+                        <th colSpan={3} className="sales-margin-group-purchase">매입</th>
+                        <th colSpan={2} className="sales-margin-group-sales">판매 조건</th>
+                        <th colSpan={3} className="sales-margin-group-profit">마진</th>
                       </tr>
                       <tr className="sales-margin-label-row">
+                        <th>코드</th>
                         <th>품목</th>
+                        <th>옵션</th>
                         <th>수량 <em>*</em></th>
                         <th>개당 원가</th>
                         <th>도매가</th>
                         <th>공급가 / 견적 단가 <em>*</em></th>
-                        <th>부가세</th>
                         <th>할인율</th>
                         <th>매출 부가세</th>
                         <th>개당 순이익</th>
@@ -1011,7 +1022,8 @@ export default function QuotePage() {
                         const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 8) : []
                         return (
                           <tr key={item.id}>
-                            <td className="sales-margin-product-cell">
+                            <td><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" aria-label={`품목 ${index + 1} 품목코드`} /></td>
+                            <td className="sales-margin-name-cell">
                               {salesEditMode && <div className="sales-margin-product-toolbar"><span>품목 {index + 1}</span><button type="button" className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>삭제</button></div>}
                               <div className="catalog-search-field sales-margin-product-search" onBlur={(event) => {
                                 if (!event.currentTarget.contains(event.relatedTarget)) setCatalogSearchOpenItemId((current) => current === item.id ? '' : current)
@@ -1039,16 +1051,12 @@ export default function QuotePage() {
                                   </div>}
                                 </div>
                               </div>
-                              <div className="sales-margin-product-meta">
-                                <label><span>코드</span><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" aria-label={`품목 ${index + 1} 품목코드`} /></label>
-                                <label><span>옵션</span><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션" aria-label={`품목 ${index + 1} 옵션`} /></label>
-                              </div>
                             </td>
+                            <td><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션" aria-label={`품목 ${index + 1} 옵션`} /></td>
                             <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
                             <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
                             <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} placeholder="도매가" aria-label={`품목 ${index + 1} 도매가`} /></td>
                             <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
-                            <td><select className="sales-margin-vat-select" value={item.vatIncluded ? 'included' : 'excluded'} onChange={(event) => updateSaleItem(item.id, 'vatIncluded', event.target.value === 'included')} aria-label={`품목 ${index + 1} 부가세`}><option value="included">포함</option><option value="excluded">별도</option></select></td>
                             <td className="sales-margin-metric">{percent(margin.discountRate)}</td>
                             <td className="sales-margin-metric">{money(margin.unitVat)}</td>
                             <td className={`sales-margin-metric sales-margin-profit-value ${margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}`}>{money(margin.unitProfit)}</td>
@@ -1059,29 +1067,27 @@ export default function QuotePage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="margin-note">새 품목의 공급가는 엑셀과 같이 VAT 포함이 기본입니다. VAT 미포함을 선택하면 견적서에 부가세 10%가 추가됩니다.</p>
                 <div className="margin-summary">
                   <div className="margin-summary-heading">
                     <div><h3>전체 금액 및 마진</h3><span>입력값을 바꾸면 자동으로 계산됩니다</span></div>
                     <div className="margin-shipping-inline">
                       <strong>배송비</strong>
-                      <label className="margin-shipping-field"><span>받는 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
-                      <label className="margin-shipping-field"><span>부담 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                      <label className="margin-shipping-field"><span>받은 배송비 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                      <label className="margin-shipping-field"><span>실 배송비 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
                       <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
                       <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
                     </div>
                   </div>
                   <div className="margin-summary-grid">
-                    <div className="margin-metric"><span>총구매액</span><strong>{money(selectedSaleTotals.totalGross)}</strong></div>
-                    <div className="margin-metric"><span>총원가 (원가×구매수량)</span><strong>{money(selectedSaleTotals.totalCost)}</strong></div>
-                    <div className="margin-metric"><span>총 매출부가세 (품목+배송비)</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
-                    <div className="margin-metric"><span>받는 배송비 (+)</span><strong>{money(selectedSaleTotals.shippingGross)}</strong></div>
-                    <div className="margin-metric"><span>부담 배송비 (-)</span><strong>{money(selectedSaleTotals.shippingCost)}</strong></div>
-                    <div className="margin-metric"><span>총순이익 (구매액−원가−부가세−배송비)</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
-                    <div className="margin-metric"><span>총순이익률 (순이익÷구매액×100)</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
+                    <div className="margin-metric"><span>총 매출</span><strong>{money(selectedSaleTotals.totalGross)}</strong></div>
+                    <div className="margin-metric"><span>총 원가</span><strong>{money(selectedSaleTotals.totalCost)}</strong></div>
+                    <div className="margin-metric"><span>총 순이익</span><strong className={selectedSaleTotals.totalProfit != null && selectedSaleTotals.totalProfit < 0 ? 'amount-negative' : ''}>{money(selectedSaleTotals.totalProfit)}</strong></div>
+                    <div className="margin-metric"><span>총 매출부가세</span><strong>{money(selectedSaleTotals.totalVat)}</strong></div>
+                    <div className="margin-metric"><span>총 순이익률</span><strong className={selectedSaleTotals.totalProfitRate != null && selectedSaleTotals.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(selectedSaleTotals.totalProfitRate)}</strong></div>
+                    <div className="margin-metric"><span>배송비 (받은 배송비−실 배송비)</span><strong className={selectedSaleShippingNet != null && selectedSaleShippingNet < 0 ? 'amount-negative' : ''}>{money(selectedSaleShippingNet)}</strong></div>
                   </div>
                   <p className="margin-note">품목과 배송비의 금액·부가세는 견적 금액과 맞추기 위해 원 단위로 반올림합니다.</p>
-                  {selectedSaleTotals.totalProfit == null && <p className="margin-warning">순이익을 계산하려면 모든 품목의 공급가·수량·원가와 부담 배송비를 0 이상으로 입력해 주세요. 받는 배송비를 반영할 때도 금액이 필요합니다. 비용이 없으면 0을 입력하세요.</p>}
+                  {selectedSaleTotals.totalProfit == null && <p className="margin-warning">순이익을 계산하려면 모든 품목의 공급가·수량·원가와 실 배송비를 0 이상으로 입력해 주세요. 받은 배송비를 반영할 때도 금액이 필요합니다. 비용이 없으면 0을 입력하세요.</p>}
                 </div>
               </section>
 
