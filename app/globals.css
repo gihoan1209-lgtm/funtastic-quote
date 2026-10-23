@@ -1013,7 +1013,7 @@ body {
   font-size: 14px;
 }
 .sales-margin-group-product, .sales-margin-group-purchase, .sales-margin-group-sales { color: #fff !important; background: #1f2421 !important; }
-.sales-margin-group-profit { color: #8a4d10 !important; background: #fff0dc !important; }
+.sales-margin-group-profit { color: #fff !important; background: #d9573f !important; }
 .sales-margin-label-row th {
   padding: 12px 7px;
   color: #34465f;
