@@ -532,7 +532,7 @@ body {
 .sales-date-strip input { min-height: 36px; }
 .status-select { min-width: 118px; color: var(--green-dark); border-color: #bed3c4; font-weight: 700; }
 .sales-form-grid { display: grid; grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr); align-items: start; gap: 16px; margin-bottom: 16px; }
-.sales-record-overview { display: grid; grid-template-columns: minmax(360px, 0.88fr) minmax(540px, 1.12fr); align-items: start; gap: 16px; margin-bottom: 16px; }
+.sales-record-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-bottom: 16px; }
 .form-card { padding: 20px; margin-bottom: 16px; }
 .sales-form-grid .form-card, .sales-record-overview .form-card { margin-bottom: 0; }
 .form-card h2 { margin-bottom: 15px; font-size: 15px; letter-spacing: -0.03em; }
@@ -587,13 +587,13 @@ body {
 .tracking-row-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
 .tracking-shipment-fields { grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1.2fr); }
 .tracking-payment-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tracking-status-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid #c9d9cd; border-radius: 7px; background: #fff; }
+.tracking-status-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid #d8ddda; border-radius: 7px; background: #fff; }
 .tracking-status-button {
   min-height: 32px;
   padding: 4px 6px;
   color: var(--text2);
   border: 0;
-  border-right: 1px solid #dfe8e0;
+  border-right: 1px solid #e5e8e6;
   background: #fff;
   font-family: inherit;
   font-size: 11px;
@@ -603,8 +603,7 @@ body {
   white-space: nowrap;
 }
 .tracking-status-button:last-child { border-right: 0; }
-.tracking-status-before { color: #8a5b00; background: #fff7df; }
-.tracking-status-completed { color: #17613d; background: #eef9f1; }
+.tracking-status-before, .tracking-status-completed { color: var(--text2); background: #fff; }
 .tracking-status-before.is-active { color: #754b00; background: #ffe4a0; box-shadow: inset 0 0 0 1px #e5ae36; }
 .tracking-status-completed.is-active { color: #fff; background: #23744a; box-shadow: inset 0 0 0 1px #17613d; }
 .tracking-status-button:hover { filter: brightness(0.97); }
