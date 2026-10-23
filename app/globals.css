@@ -450,9 +450,13 @@ body {
 .back-button { padding: 4px 0; color: var(--text2); border: 0; background: transparent; font-size: 13px; font-weight: 600; }
 .back-button:hover { color: var(--text); }
 .sales-detail-title { margin-bottom: 18px; text-align: left; }
+.sales-title-tools { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
+.sales-date-strip { display: grid; grid-template-columns: repeat(2, minmax(140px, 165px)); gap: 8px; }
+.sales-date-strip .field { gap: 4px; }
+.sales-date-strip input { min-height: 36px; }
 .status-select { min-width: 118px; color: var(--green-dark); border-color: #bed3c4; font-weight: 700; }
 .sales-form-grid { display: grid; grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr); align-items: start; gap: 16px; margin-bottom: 16px; }
-.sales-record-overview { display: grid; gap: 16px; margin-bottom: 16px; }
+.sales-record-overview { display: grid; grid-template-columns: minmax(360px, 0.88fr) minmax(540px, 1.12fr); align-items: start; gap: 16px; margin-bottom: 16px; }
 .form-card { padding: 20px; margin-bottom: 16px; }
 .sales-form-grid .form-card, .sales-record-overview .form-card { margin-bottom: 0; }
 .form-card h2 { margin-bottom: 15px; font-size: 15px; letter-spacing: -0.03em; }
@@ -475,51 +479,48 @@ body {
 .check-label, .vat-toggle, .quote-vat { display: inline-flex; align-items: center; gap: 5px; color: var(--text2); font-size: 12px; }
 .check-label input, .vat-toggle input, .quote-vat input { width: 14px; height: 14px; accent-color: var(--green); }
 
-.sales-core-card { padding: 15px 20px; }
-.sales-core-bar { display: grid; grid-template-columns: minmax(170px, 0.42fr) minmax(0, 1.58fr); align-items: end; gap: 20px; }
-.sales-core-label h2 { margin: 0 0 3px; font-size: 15px; letter-spacing: -0.03em; }
-.sales-core-label p { color: var(--text2); font-size: 12px; line-height: 1.45; }
-.sales-core-fields { grid-template-columns: minmax(0, 1fr) minmax(190px, 0.36fr); align-items: end; }
-.tracking-card { display: grid; align-content: start; gap: 16px; }
-.tracking-card-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
-.tracking-card-header > div:first-child { min-width: 0; }
-.tracking-card-header h2 { margin: 0 0 3px; font-size: 15px; letter-spacing: -0.03em; }
-.tracking-card-header p { color: var(--text2); font-size: 12px; }
-.tracking-due-date { width: min(250px, 100%); max-width: none; flex: 0 1 250px; }
-.tracking-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
+.sales-core-card, .tracking-card { padding: 14px; }
+.sales-core-heading { margin-bottom: 10px; }
+.sales-core-heading h2, .tracking-card-header h2 { margin: 0; font-size: 15px; letter-spacing: -0.03em; }
+.sales-core-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
+.tracking-card { display: grid; align-content: start; gap: 10px; }
+.tracking-card-header { display: block; padding-bottom: 8px; border-bottom: 1px solid #e0e9e1; }
+.tracking-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .tracking-section {
   display: grid;
-  gap: 12px;
-  padding: 15px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid #d5e2d7;
-  border-radius: 9px;
+  border-radius: 8px;
   background: #fbfdfb;
 }
 .tracking-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.tracking-section h3 { font-size: 15px; letter-spacing: -0.02em; }
-.tracking-list { display: grid; gap: 10px; }
+.tracking-section h3 { font-size: 13px; letter-spacing: -0.02em; }
+.tracking-section-heading .btn-light { min-height: 30px; padding: 4px 7px; font-size: 11px; }
+.tracking-list { display: grid; gap: 8px; }
 .tracking-row {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 7px;
+  padding: 8px;
   border: 1px solid #dce7dd;
   border-radius: 8px;
   background: #fff;
 }
-.tracking-row-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; }
-.tracking-row-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+.tracking-row-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.tracking-row-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.tracking-shipment-fields { grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1.2fr); }
 .tracking-payment-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tracking-row-label { color: var(--text); font-size: 12px; white-space: nowrap; }
+.tracking-row-label { color: var(--text); font-size: 11px; white-space: nowrap; }
 .tracking-status-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid #c9d9cd; border-radius: 7px; background: #fff; }
 .tracking-status-button {
-  min-height: 38px;
-  padding: 5px 7px;
+  min-height: 32px;
+  padding: 4px 6px;
   color: var(--text2);
   border: 0;
   border-right: 1px solid #dfe8e0;
   background: #fff;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -531,10 +532,10 @@ body {
 .tracking-status-before.is-active { color: #754b00; background: #ffe4a0; box-shadow: inset 0 0 0 1px #e5ae36; }
 .tracking-status-completed.is-active { color: #fff; background: #23744a; box-shadow: inset 0 0 0 1px #17613d; }
 .tracking-status-button:hover { filter: brightness(0.97); }
-.tracking-date-field, .tracking-amount-field { display: grid; gap: 5px; min-width: 0; }
-.tracking-date-field > span, .tracking-amount-field > span { color: var(--text2); font-size: 11px; font-weight: 700; }
-.tracking-date-field input, .tracking-amount-field input { width: 100%; min-width: 0; min-height: 40px; }
-.tracking-remove { min-height: 38px; padding: 5px 8px; }
+.tracking-date-field, .tracking-amount-field, .tracking-memo-field { display: grid; gap: 4px; min-width: 0; }
+.tracking-date-field > span, .tracking-amount-field > span, .tracking-memo-field > span { color: var(--text2); font-size: 11px; font-weight: 700; }
+.tracking-date-field input, .tracking-amount-field input, .tracking-memo-field input { width: 100%; min-width: 0; min-height: 34px; }
+.tracking-remove { min-height: 32px; padding: 4px 7px; font-size: 11px; }
 
 .sales-edit-fields > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .sales-readonly :is(input, textarea, select) {
@@ -581,9 +582,11 @@ body {
   border: 1px solid #dce5de;
   border-radius: 7px;
 }
-.sales-readonly .tracking-row-top, .sales-readonly .tracking-row-fields { padding: 9px 10px; }
+.sales-readonly .tracking-row-top { padding: 8px 9px; }
 .sales-readonly .tracking-row-top { border-bottom: 1px solid #dce5de; }
-.sales-readonly .tracking-row-fields { background: #fbfdfb; }
+.sales-readonly .tracking-row-fields { gap: 0; padding: 0; background: #fbfdfb; }
+.sales-readonly .tracking-row-fields > label { padding: 7px 9px; }
+.sales-readonly .tracking-row-fields > label + label { border-left: 1px solid #dce5de; }
 .sales-readonly .tracking-status-buttons { border: 0; border-radius: 0; }
 .sales-readonly .tracking-status-button { opacity: 1; }
 .sales-readonly .tracking-row :is(input, select) {
@@ -688,8 +691,8 @@ body {
 .note-cell { width: 70px; }
 .quote-vat { justify-content: center; white-space: nowrap; font-size: 11px; }
 
-@media (max-width: 1200px) {
-  .sales-form-grid { grid-template-columns: 1fr; }
+@media (max-width: 1100px) {
+  .sales-form-grid, .sales-record-overview { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 880px) {
@@ -715,14 +718,12 @@ body {
   .sales-heading-actions, .status-select, .back-button { position: static; }
   .sales-heading-actions, .sales-detail-actions { justify-content: flex-start; }
   .sales-heading h1, .sales-detail-title h1 { font-size: 25px; }
+  .sales-title-tools { width: 100%; justify-content: space-between; }
+  .sales-date-strip { flex: 1 1 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-card { padding: 16px; }
   .form-card-heading { align-items: flex-start; flex-direction: column; }
   .form-card-actions { justify-content: flex-start; }
-  .sales-core-card { padding: 16px; }
-  .sales-core-bar { grid-template-columns: 1fr; gap: 13px; }
-  .sales-core-fields { grid-template-columns: 1fr; }
-  .tracking-card-header { align-items: stretch; flex-direction: column; }
-  .tracking-due-date { width: 100%; flex-basis: auto; }
+  .sales-core-card, .tracking-card { padding: 14px; }
   .sales-items-wrap { margin: 0 -16px; }
   .sales-items-table th:first-child, .sales-items-table td:first-child { padding-left: 16px; }
   .sales-items-table th:last-child, .sales-items-table td:last-child { padding-right: 16px; }
@@ -732,9 +733,14 @@ body {
 }
 
 @media (max-width: 520px) {
+  .sales-title-tools { align-items: stretch; flex-direction: column; }
+  .sales-date-strip { width: 100%; }
+  .status-select { width: 100%; }
+  .sales-core-fields { grid-template-columns: 1fr; }
   .tracking-row-top { grid-template-columns: minmax(0, 1fr) auto; }
   .tracking-status-buttons { grid-column: 1 / -1; grid-row: 2; }
-  .tracking-payment-fields { grid-template-columns: 1fr; }
+  .tracking-shipment-fields, .tracking-payment-fields { grid-template-columns: 1fr; }
+  .sales-readonly .tracking-row-fields > label + label { border-top: 1px solid #dce5de; border-left: 0; }
 }
 
 @media print {

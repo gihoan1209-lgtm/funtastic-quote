@@ -77,6 +77,7 @@ const createShipment = (id = 1, values = {}) => ({
   id,
   status: 'before',
   date: '',
+  memo: '',
   ...values,
 })
 
@@ -98,6 +99,12 @@ const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
   return {
     ...record,
+    clientName: String(record.clientName ?? ''),
+    contactPhone: String(record.contactPhone ?? ''),
+    businessRegistrationNumber: String(record.businessRegistrationNumber ?? ''),
+    taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
+    quoteDate: String(record.quoteDate ?? today()),
+    requestedDueDate: String(record.requestedDueDate ?? ''),
     status: record.status === 'confirmed' || record.status === 'issued' ? 'confirmed' : 'draft',
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
@@ -169,6 +176,8 @@ const createSale = () => {
     clientName: '',
     contactName: '',
     contactPhone: '',
+    businessRegistrationNumber: '',
+    taxInvoiceEmail: '',
     recipientTitle: '대표이사 귀하',
     status: 'draft',
     requestedDueDate: '',
@@ -263,7 +272,7 @@ export default function QuotePage() {
     return sales.filter((sale) => {
       const matchesStatus = salesStatusFilter === 'all' || sale.status === salesStatusFilter
       const firstItem = sale.items?.find((item) => item.name?.trim())?.name || ''
-      const matchesSearch = !query || [sale.clientName, sale.contactName, firstItem]
+      const matchesSearch = !query || [sale.clientName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, firstItem]
         .join(' ')
         .toLocaleLowerCase('ko-KR')
         .includes(query)
@@ -901,26 +910,31 @@ export default function QuotePage() {
                 <fieldset disabled={!salesEditMode}>
               <section className="sales-detail-title">
                 <div><p className="eyebrow">SALES RECORD</p><h1>{selectedSale.clientName || '새 영업건'}</h1></div>
-                <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
-                  {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
-                </select>
+                <div className="sales-title-tools">
+                  <div className="sales-date-strip">
+                    <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
+                    <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
+                  </div>
+                  <select className="status-select" value={selectedSale.status} onChange={(event) => updateSaleField('status', event.target.value)} aria-label="영업 상태">
+                    {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
+                  </select>
+                </div>
               </section>
 
               <div className="sales-record-overview">
                 <section className="form-card sales-core-card">
-                  <div className="sales-core-bar">
-                    <div className="sales-core-label"><h2>거래처 정보</h2><p>견적서에 쓰이는 거래처와 견적일만 관리합니다.</p></div>
-                    <div className="form-fields sales-core-fields">
-                      <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
-                      <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
-                    </div>
+                  <div className="sales-core-heading"><h2>거래처 정보</h2></div>
+                  <div className="form-fields sales-core-fields">
+                    <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
+                    <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
+                    <label className="field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
+                    <label className="field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
                   </div>
                 </section>
 
                 <section className="form-card tracking-card">
                   <div className="tracking-card-header">
-                    <div><h2>출고 · 입금 관리</h2><p>부분 출고와 부분 입금은 각 영역에서 행을 추가해 따로 기록하세요.</p></div>
-                    <label className="field tracking-due-date"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
+                    <h2>출고 · 입금 관리</h2>
                   </div>
                   <div className="tracking-stack">
                     <section className="tracking-section tracking-shipment-section">
@@ -936,8 +950,9 @@ export default function QuotePage() {
                               </div>
                               <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
                             </div>
-                            <div className="tracking-row-fields">
+                            <div className="tracking-row-fields tracking-shipment-fields">
                               <label className="tracking-date-field"><span>출고일</span><input type="date" value={shipment.date} onClick={openNativeDatePicker} onChange={(event) => updateShipment(shipment.id, 'date', event.target.value)} /></label>
+                              <label className="tracking-memo-field"><span>메모</span><input value={shipment.memo ?? ''} onChange={(event) => updateShipment(shipment.id, 'memo', event.target.value)} placeholder="출고 메모" /></label>
                             </div>
                           </div>
                         ))}
