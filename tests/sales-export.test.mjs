@@ -28,7 +28,7 @@ test('sales export flattens visible sales into the requested seven columns', () 
 
 test('sales export workbook contains a styled XLSX sheet with numeric amount cells', () => {
   const workbook = createSalesListWorkbook([
-    { 상품코드: '001', 제품명: 'A&B <샘플>', 옵션: '빨강', 원가: 1250, 수량: 12, '개당 판매가': 2500, 입금자: '거래처' },
+    { 상품코드: '001', 제품명: 'A&B <샘플>', 옵션: '빨강', 원가: 1250, 수량: 12.5, '개당 판매가': 2500, 입금자: '거래처' },
   ])
   const files = unzipSync(workbook)
 
@@ -36,8 +36,12 @@ test('sales export workbook contains a styled XLSX sheet with numeric amount cel
   assert.ok(files['xl/workbook.xml'])
   assert.ok(files['xl/styles.xml'])
   const sheet = strFromU8(files['xl/worksheets/sheet1.xml'])
+  const styles = strFromU8(files['xl/styles.xml'])
   assert.match(sheet, /sheet name="영업목록"|<worksheet/)
   assert.match(sheet, /A&amp;B &lt;샘플&gt;/)
   assert.match(sheet, /r="D2" s="2"><v>1250<\/v>/)
+  assert.match(sheet, /r="E2" s="3"><v>12\.5<\/v>/)
   assert.match(sheet, /r="F2" s="2"><v>2500<\/v>/)
+  assert.match(styles, /formatCode="#\,##0"/)
+  assert.match(styles, /formatCode="#\,##0\.##"/)
 })
