@@ -150,16 +150,19 @@ body {
   color: #fff;
   padding: 8px 10px;
   text-align: center;
+  vertical-align: middle;
   font-weight: 500;
   border: 1px solid #333;
 }
 .items-table td {
   border: 1px solid var(--border);
   padding: 6px 8px;
+  text-align: center;
   vertical-align: middle;
 }
 .items-table textarea.editable {
   display: block;
+  padding: 6px 4px;
   resize: none;
   overflow: hidden !important;
   line-height: 1.5;
@@ -175,6 +178,7 @@ body {
 }
 .items-table .item-name {
   overflow-wrap: anywhere;
+  text-align: center;
   white-space: pre-wrap;
 }
 .items-table .item-option {
@@ -182,7 +186,9 @@ body {
   text-align: center;
   white-space: pre-wrap;
 }
-.items-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.items-table .num { text-align: center; font-variant-numeric: tabular-nums; }
+.items-table .editable { text-align: center; }
+.items-table .editable.num, .items-table .formatted-number-input { text-align: center; }
 .items-table input[type="number"].editable {
   appearance: textfield;
   -moz-appearance: textfield;
