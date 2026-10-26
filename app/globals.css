@@ -170,6 +170,9 @@ body {
 .items-table textarea.editable::-webkit-scrollbar {
   display: none;
 }
+.items-table .item-name-cell {
+  min-width: 140px;
+}
 .items-table .item-name {
   overflow-wrap: anywhere;
   white-space: pre-wrap;

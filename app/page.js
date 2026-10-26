@@ -323,8 +323,9 @@ const SALES_SAVE_STATUS = {
 
 const resizeTextArea = (element) => {
   if (!element) return
-  element.style.height = 'auto'
-  element.style.height = `${element.scrollHeight + 4}px`
+  const minHeight = Number.parseFloat(window.getComputedStyle(element).minHeight) || 0
+  element.style.height = '0px'
+  element.style.height = `${Math.max(minHeight, element.scrollHeight)}px`
 }
 
 const quoteLabel = (quote) => {
@@ -576,9 +577,33 @@ export default function QuotePage() {
 
   useLayoutEffect(() => {
     const resizeAll = () => document.querySelectorAll('textarea[data-autosize="true"]').forEach(resizeTextArea)
+    const quoteTableWrap = document.querySelector('.quote-table-wrap')
+    let lastTableWidth = quoteTableWrap?.clientWidth || 0
+    const resizeForTableWidth = (entries) => {
+      const nextWidth = entries[0]?.contentRect.width || 0
+      if (Math.round(nextWidth) === Math.round(lastTableWidth)) return
+      lastTableWidth = nextWidth
+      window.requestAnimationFrame(resizeAll)
+    }
+    const tableResizeObserver = typeof ResizeObserver !== 'undefined' && quoteTableWrap
+      ? new ResizeObserver(resizeForTableWidth)
+      : null
+    let disposed = false
     resizeAll()
+    const resizeAfterLayout = window.requestAnimationFrame(resizeAll)
+    tableResizeObserver?.observe(quoteTableWrap)
+    window.addEventListener('resize', resizeAll)
     window.addEventListener('beforeprint', resizeAll)
-    return () => window.removeEventListener('beforeprint', resizeAll)
+    document.fonts?.ready?.then(() => {
+      if (!disposed) resizeAll()
+    })
+    return () => {
+      disposed = true
+      window.cancelAnimationFrame(resizeAfterLayout)
+      tableResizeObserver?.disconnect()
+      window.removeEventListener('resize', resizeAll)
+      window.removeEventListener('beforeprint', resizeAll)
+    }
   }, [activeTab, items, notes, selectedSale])
 
   useEffect(() => {
@@ -1638,14 +1663,14 @@ export default function QuotePage() {
 
             <div className="quote-table-wrap">
               <table className="items-table">
-                <thead><tr><th className="narrow-cell">No.</th><th>품명</th><th className="spec-cell">옵션</th><th className="quantity-cell">수량</th><th className="price-cell">단가</th><th className="supply-cell">공급가액</th><th className="vat-cell">세액</th><th className="note-cell">비고</th><th className="narrow-cell no-print"></th></tr></thead>
+                <thead><tr><th className="narrow-cell">No.</th><th className="item-name-cell">품명</th><th className="spec-cell">옵션</th><th className="quantity-cell">수량</th><th className="price-cell">단가</th><th className="supply-cell">공급가액</th><th className="vat-cell">세액</th><th className="note-cell">비고</th><th className="narrow-cell no-print"></th></tr></thead>
                 <tbody>
                   {items.map((item, index) => {
                     const { supply, vat } = calculateQuoteItem(item)
                     return (
                       <tr key={item.id}>
                         <td className="center">{index + 1}</td>
-                        <td><textarea className="editable item-name" data-autosize="true" value={item.name} onChange={(event) => updateItem(item.id, 'name', event.target.value)} placeholder="품명" rows={1} onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
+                        <td className="item-name-cell"><textarea className="editable item-name" data-autosize="true" value={item.name} onChange={(event) => updateItem(item.id, 'name', event.target.value)} placeholder="품명" aria-label={`품목 ${index + 1} 품명`} rows={1} wrap="soft" onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
                         <td className="center"><input className="editable" value={item.spec} onChange={(event) => updateItem(item.id, 'spec', event.target.value)} /></td>
                         <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateItem(item.id, 'qty', ungroupNumber(event.target.value))} /></td>
                         <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateItem(item.id, 'price', ungroupNumber(event.target.value))} /></td>
