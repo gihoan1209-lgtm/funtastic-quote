@@ -1671,7 +1671,7 @@ export default function QuotePage() {
                       <tr key={item.id}>
                         <td className="center">{index + 1}</td>
                         <td className="item-name-cell"><textarea className="editable item-name" data-autosize="true" value={item.name} onChange={(event) => updateItem(item.id, 'name', event.target.value)} placeholder="품명" aria-label={`품목 ${index + 1} 품명`} rows={1} wrap="soft" onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
-                        <td className="center"><input className="editable" value={item.spec} onChange={(event) => updateItem(item.id, 'spec', event.target.value)} /></td>
+                        <td className="center spec-cell"><textarea className="editable item-option" data-autosize="true" value={item.spec} onChange={(event) => updateItem(item.id, 'spec', event.target.value)} aria-label={`품목 ${index + 1} 옵션`} rows={1} wrap="soft" onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
                         <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateItem(item.id, 'qty', ungroupNumber(event.target.value))} /></td>
                         <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateItem(item.id, 'price', ungroupNumber(event.target.value))} /></td>
                         <td className="num">{comma(supply)}</td>

@@ -177,6 +177,11 @@ body {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.items-table .item-option {
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: pre-wrap;
+}
 .items-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .items-table input[type="number"].editable {
   appearance: textfield;
@@ -823,7 +828,7 @@ body {
 .centered-input { text-align: center; }
 .quote-table-wrap { overflow-x: auto; }
 .narrow-cell { width: 36px; }
-.spec-cell { width: 60px; }
+.spec-cell { width: 76px; min-width: 76px; }
 .quantity-cell { width: 76px; }
 .price-cell { width: 90px; }
 .supply-cell { width: 100px; }
