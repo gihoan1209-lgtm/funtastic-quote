@@ -432,7 +432,7 @@ body {
 .sales-advanced-filters :is(input, select):focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1); }
 .sales-date-range-mark { padding-bottom: 9px; color: var(--text3); font-weight: 700; }
 .sales-table-wrap, .sales-items-wrap { overflow-x: auto; }
-.sales-table { width: 100%; min-width: 1180px; border-collapse: collapse; font-size: 13px; }
+.sales-table { width: 100%; min-width: 1260px; border-collapse: collapse; font-size: 13px; }
 .sales-table th {
   padding: 12px 14px;
   color: var(--text2);
@@ -454,6 +454,20 @@ body {
 .sales-row-action { text-align: center; }
 .table-link { padding: 4px 0; color: var(--green); border: 0; background: transparent; font-size: 12px; font-weight: 700; }
 .table-link:hover { color: var(--green-dark); text-decoration: underline; }
+.sales-list-status-select {
+  min-width: 92px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+.sales-list-status-select:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.sales-list-save-status { margin-left: auto; }
 
 .status-badge {
   display: inline-flex;
@@ -475,6 +489,9 @@ body {
 .status-tracking-before { color: #5c665e; background: #edf0ed; }
 .status-tracking-completed { color: #17613d; background: #eaf6ed; }
 .status-tracking-more { color: var(--text2); background: var(--surface-muted); }
+.status-badge-action { border: 0; font-family: inherit; cursor: pointer; }
+.status-badge-action:hover { filter: brightness(0.96); }
+.status-badge-action:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 .empty-state { display: grid; justify-items: center; gap: 9px; padding: 72px 20px; text-align: center; }
 .empty-state-icon {

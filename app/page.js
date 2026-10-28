@@ -129,11 +129,13 @@ const trackingStatusItems = (rows, type) => {
     const completed = row?.status === 'completed'
     return {
       id: String(row?.id ?? index),
+      rowId: row?.id ?? index,
+      status: completed ? 'completed' : 'before',
       label: completed ? completedLabel : beforeLabel,
       className: completed ? 'status-tracking-completed' : 'status-tracking-before',
     }
   })
-  if (sourceRows.length > 2) items.push({ id: 'more', label: `+${sourceRows.length - 2}`, className: 'status-tracking-more' })
+  if (sourceRows.length > 2) items.push({ id: 'more', label: `+${sourceRows.length - 2}`, className: 'status-tracking-more', isMore: true })
   return items
 }
 
@@ -807,6 +809,31 @@ export default function QuotePage() {
     const saved = persistSales(nextSales)
     setSalesSaveState(saved ? 'saved' : 'error')
   }
+  const updateSaleFromList = (saleId, updater) => {
+    const updatedAt = new Date().toISOString()
+    const nextSales = salesRef.current.map((sale) => (
+      sale.id === saleId ? { ...updater(sale), updatedAt } : sale
+    ))
+    const saved = persistSales(nextSales)
+    setSalesSaveState(saved ? 'saved' : 'error')
+  }
+  const updateSaleStatusFromList = (saleId, status) => {
+    if (!SALE_STATUS[status]) return
+    updateSaleFromList(saleId, (sale) => ({ ...sale, status }))
+  }
+  const toggleTrackingStatusFromList = (saleId, type, trackingId) => {
+    const isShipment = type === 'shipment'
+    const field = isShipment ? 'shipments' : 'payments'
+    const createRow = isShipment ? createShipment : createPayment
+    updateSaleFromList(saleId, (sale) => ({
+      ...sale,
+      [field]: normalizedTrackingRows(sale[field], createRow).map((row) => (
+        String(row.id) === String(trackingId)
+          ? { ...row, status: row.status === 'completed' ? 'before' : 'completed' }
+          : row
+      )),
+    }))
+  }
   const updateSaleItem = (itemId, field, value) => {
     if (['qty', 'price', 'cost', 'wholesalePrice'].includes(field) && !nonNegativeInput(value)) return
     updateSelectedSale((sale) => ({
@@ -988,10 +1015,10 @@ export default function QuotePage() {
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
 
-  const copySelectedSale = () => {
-    if (!selectedSale) return
-    const sale = createCopiedSale(selectedSale)
-    const saved = persistSales([sale, ...sales])
+  const openCopiedSale = (sourceSale) => {
+    if (!sourceSale) return
+    const sale = createCopiedSale(sourceSale)
+    const saved = persistSales([sale, ...salesRef.current])
     setSalesSaveState(saved ? 'idle' : 'error')
     if (!saved) return
     setSalesEditMode(true)
@@ -1001,6 +1028,7 @@ export default function QuotePage() {
     setActiveTab('sales')
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
+  const copySelectedSale = () => openCopiedSale(selectedSale)
 
   const openSale = (saleId) => {
     setSalesSaveState('idle')
@@ -1282,6 +1310,7 @@ export default function QuotePage() {
                   <button type="button" className={`btn-light sales-filter-toggle${salesAdvancedSearchOpen ? ' is-active' : ''}`} onClick={() => setSalesAdvancedSearchOpen((current) => !current)} aria-expanded={salesAdvancedSearchOpen}>상세 검색</button>
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
                   <span className="sales-count">{filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
+                  {salesSaveState !== 'idle' && <span className={`sales-save-status sales-list-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                 </div>
                 {salesAdvancedSearchOpen && (
                   <div className="sales-advanced-filters">
@@ -1295,7 +1324,7 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th><th>관리</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
@@ -1303,7 +1332,8 @@ export default function QuotePage() {
                           const profit = saleTotals.totalProfit
                           const profitRate = saleTotals.totalProfitRate
                           const firstItem = quoteItems[0]?.name || '품목 미입력'
-                          const status = SALE_STATUS[sale.status] || SALE_STATUS.draft
+                          const saleStatus = SALE_STATUS[sale.status] ? sale.status : 'draft'
+                          const status = SALE_STATUS[saleStatus]
                           const shipmentStatuses = trackingStatusItems(sale.shipments, 'shipment')
                           const paymentStatuses = trackingStatusItems(sale.payments, 'payment')
                           const isSelected = selectedSaleIds.includes(sale.id)
@@ -1311,15 +1341,16 @@ export default function QuotePage() {
                             <tr key={sale.id} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(quoteDateForList(sale))}</td>
-                              <td><span className={`status-badge ${status.className}`}>{status.label}</span></td>
-                              <td><div className="tracking-status-summary">{shipmentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
-                              <td><div className="tracking-status-summary">{paymentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
+                              <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 상태 변경`} title="상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>
+                              <td><div className="tracking-status-summary">{shipmentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} key={trackingStatus.id} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '출고전' : '출고완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'shipment', trackingStatus.rowId) }}>{trackingStatus.label}</button>)}</div></td>
+                              <td><div className="tracking-status-summary">{paymentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} key={trackingStatus.id} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '입금전' : '입금완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'payment', trackingStatus.rowId) }}>{trackingStatus.label}</button>)}</div></td>
                               <td className="sales-client">{sale.clientName || '거래처 미입력'}</td>
                               <td>{firstItem}</td>
                               <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
                               <td className="amount">{money(saleTotals.totalGross)}</td>
                               <td className={`amount ${profit != null && profit < 0 ? 'amount-negative' : ''}`}>{money(profit)}</td>
                               <td className={`amount ${profitRate != null && profitRate < 0 ? 'amount-negative' : ''}`}>{percent(profitRate)}</td>
+                              <td className="sales-row-action"><button type="button" className="table-link" onClick={(event) => { event.stopPropagation(); openCopiedSale(sale) }} aria-label={`${sale.clientName || '거래처 미입력'} 복사하여 새 영업건 만들기`}>복사</button></td>
                             </tr>
                           )
                         })}
