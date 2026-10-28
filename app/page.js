@@ -376,6 +376,21 @@ const createSale = () => {
   }
 }
 
+const createCopiedSale = (source = {}) => {
+  const sale = createSale()
+  const sourceItems = Array.isArray(source.items) && source.items.length ? source.items : sale.items
+  return {
+    ...sale,
+    clientName: String(source.clientName ?? ''),
+    contactName: String(source.contactName ?? ''),
+    contactPhone: String(source.contactPhone ?? ''),
+    businessRegistrationNumber: String(source.businessRegistrationNumber ?? ''),
+    taxInvoiceEmail: String(source.taxInvoiceEmail ?? ''),
+    recipientTitle: String(source.recipientTitle || sale.recipientTitle),
+    items: sourceItems.map((item, index) => createSaleItem(index + 1, { ...item, id: index + 1 })),
+  }
+}
+
 function toKorean(value) {
   const number = Math.round(Number(value) || 0)
   if (number === 0) return '금영원정'
@@ -973,6 +988,20 @@ export default function QuotePage() {
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
 
+  const copySelectedSale = () => {
+    if (!selectedSale) return
+    const sale = createCopiedSale(selectedSale)
+    const saved = persistSales([sale, ...sales])
+    setSalesSaveState(saved ? 'idle' : 'error')
+    if (!saved) return
+    setSalesEditMode(true)
+    setCatalogSearchOpenItemId('')
+    setSelectedSaleId(sale.id)
+    setSalesView('edit')
+    setActiveTab('sales')
+    writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
+  }
+
   const openSale = (saleId) => {
     setSalesSaveState('idle')
     setSalesEditMode(false)
@@ -1313,6 +1342,7 @@ export default function QuotePage() {
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
                   <SalesStatusPicker value={selectedSale.status} onChange={updateSaleStatus} />
+                  <button className="btn-light" onClick={copySelectedSale} title="거래처와 품목을 복사해 새 영업건을 만듭니다">영업건 복사</button>
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
