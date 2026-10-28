@@ -140,6 +140,7 @@ const trackingStatusItems = (rows, type) => {
 const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
   const createdDate = String(record.createdAt ?? '').slice(0, 10)
+  const quoteDate = String(record.quoteDate || record.saleDate || createdDate || today())
   return {
     ...record,
     saleDate: String(record.saleDate || createdDate || record.quoteDate || today()),
@@ -147,7 +148,7 @@ const normalizeSaleRecord = (sale = {}) => {
     contactPhone: String(record.contactPhone ?? ''),
     businessRegistrationNumber: String(record.businessRegistrationNumber ?? ''),
     taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
-    quoteDate: String(record.quoteDate ?? today()),
+    quoteDate,
     requestedDueDate: String(record.requestedDueDate ?? ''),
     status: ['draft', 'confirmed', 'pending', 'inProgress', 'completed'].includes(record.status)
       ? record.status
@@ -315,6 +316,10 @@ const SALES_DATE_FIELDS = [
   { value: 'requestedDueDate', label: '납기 희망일' },
 ]
 
+const quoteDateForList = (sale = {}) => String(
+  sale.quoteDate || sale.saleDate || String(sale.createdAt ?? '').slice(0, 10) || '',
+)
+
 const SALES_SAVE_STATUS = {
   dirty: { label: '저장 필요', className: 'sales-save-status-dirty' },
   saved: { label: '저장되었습니다', className: 'sales-save-status-saved' },
@@ -406,7 +411,7 @@ export default function QuotePage() {
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesAdvancedSearchOpen, setSalesAdvancedSearchOpen] = useState(false)
-  const [salesDateField, setSalesDateField] = useState('saleDate')
+  const [salesDateField, setSalesDateField] = useState('quoteDate')
   const [salesDateFrom, setSalesDateFrom] = useState('')
   const [salesDateTo, setSalesDateTo] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
@@ -469,7 +474,7 @@ export default function QuotePage() {
       const matchesStartDate = !salesDateFrom || (dateValue && dateValue >= salesDateFrom)
       const matchesEndDate = !salesDateTo || (dateValue && dateValue <= salesDateTo)
       return matchesStatus && matchesSearch && matchesStartDate && matchesEndDate
-    })
+    }).sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
   }, [sales, salesDateField, salesDateFrom, salesDateTo, salesSearch, salesStatusFilter])
 
   const selectedSales = useMemo(
@@ -511,7 +516,7 @@ export default function QuotePage() {
   const resetSalesFilters = () => {
     setSalesSearch('')
     setSalesStatusFilter('all')
-    setSalesDateField('saleDate')
+    setSalesDateField('quoteDate')
     setSalesDateFrom('')
     setSalesDateTo('')
   }
@@ -1261,7 +1266,7 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>등록일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
@@ -1276,7 +1281,7 @@ export default function QuotePage() {
                           return (
                             <tr key={sale.id} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
-                              <td>{formatShortDate(sale.saleDate)}</td>
+                              <td>{formatShortDate(quoteDateForList(sale))}</td>
                               <td><span className={`status-badge ${status.className}`}>{status.label}</span></td>
                               <td><div className="tracking-status-summary">{shipmentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
                               <td><div className="tracking-status-summary">{paymentStatuses.map((trackingStatus) => <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span>)}</div></td>
