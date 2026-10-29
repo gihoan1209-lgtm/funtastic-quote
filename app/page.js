@@ -10,6 +10,11 @@ import {
   ungroupNumber,
 } from '../lib/numeric-input.mjs'
 import {
+  calculateMonthlyQuoteSales,
+  quoteDateForList,
+  quoteYearsForSales,
+} from '../lib/sales-monthly-summary.mjs'
+import {
   applyCatalogItemToSaleItem,
   catalogItemsFromWorksheetRows,
   normalizeCatalogItem,
@@ -342,16 +347,6 @@ const SalesStatusPicker = ({ value, onChange }) => {
   )
 }
 
-const SALES_DATE_FIELDS = [
-  { value: 'saleDate', label: '등록일' },
-  { value: 'quoteDate', label: '견적일' },
-  { value: 'requestedDueDate', label: '납기 희망일' },
-]
-
-const quoteDateForList = (sale = {}) => String(
-  sale.quoteDate || sale.saleDate || String(sale.createdAt ?? '').slice(0, 10) || '',
-)
-
 const SALES_SAVE_STATUS = {
   dirty: { label: '저장 필요', className: 'sales-save-status-dirty' },
   saved: { label: '저장되었습니다', className: 'sales-save-status-saved' },
@@ -460,9 +455,11 @@ export default function QuotePage() {
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesAdvancedSearchOpen, setSalesAdvancedSearchOpen] = useState(false)
-  const [salesDateField, setSalesDateField] = useState('quoteDate')
+  const [salesDateFilterMode, setSalesDateFilterMode] = useState('daily')
   const [salesDateFrom, setSalesDateFrom] = useState('')
   const [salesDateTo, setSalesDateTo] = useState('')
+  const [salesQuoteYear, setSalesQuoteYear] = useState(() => today().slice(0, 4))
+  const [salesQuoteMonth, setSalesQuoteMonth] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
@@ -512,7 +509,7 @@ export default function QuotePage() {
     [filteredCostCatalog, costCatalogVisibleCount],
   )
 
-  const filteredSales = useMemo(() => {
+  const salesMatchingSearchAndStatus = useMemo(() => {
     const query = salesSearch.trim().toLocaleLowerCase('ko-KR')
     return sales.filter((sale) => {
       const matchesStatus = salesStatusFilter === 'all' || sale.status === salesStatusFilter
@@ -521,12 +518,35 @@ export default function QuotePage() {
         .join(' ')
         .toLocaleLowerCase('ko-KR')
         .includes(query)
-      const dateValue = String(sale?.[salesDateField] ?? '')
-      const matchesStartDate = !salesDateFrom || (dateValue && dateValue >= salesDateFrom)
-      const matchesEndDate = !salesDateTo || (dateValue && dateValue <= salesDateTo)
-      return matchesStatus && matchesSearch && matchesStartDate && matchesEndDate
+      return matchesStatus && matchesSearch
+    })
+  }, [sales, salesSearch, salesStatusFilter])
+
+  const filteredSales = useMemo(() => {
+    return salesMatchingSearchAndStatus.filter((sale) => {
+      const quoteDate = quoteDateForList(sale)
+      if (salesDateFilterMode === 'monthly') {
+        const quoteMonth = salesQuoteMonth ? `${salesQuoteYear}-${salesQuoteMonth}` : `${salesQuoteYear}-`
+        return Boolean(quoteDate && quoteDate.startsWith(quoteMonth))
+      }
+      const matchesStartDate = !salesDateFrom || (quoteDate && quoteDate >= salesDateFrom)
+      const matchesEndDate = !salesDateTo || (quoteDate && quoteDate <= salesDateTo)
+      return matchesStartDate && matchesEndDate
     }).sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
-  }, [sales, salesDateField, salesDateFrom, salesDateTo, salesSearch, salesStatusFilter])
+  }, [salesDateFilterMode, salesDateFrom, salesDateTo, salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear])
+
+  const salesQuoteYears = useMemo(
+    () => quoteYearsForSales(sales, today().slice(0, 4)),
+    [sales],
+  )
+  const monthlyQuoteSales = useMemo(
+    () => calculateMonthlyQuoteSales(salesMatchingSearchAndStatus, salesQuoteYear),
+    [salesMatchingSearchAndStatus, salesQuoteYear],
+  )
+  const monthlyQuoteSalesTotal = useMemo(
+    () => monthlyQuoteSales.reduce((sum, month) => sum + month.totalGross, 0),
+    [monthlyQuoteSales],
+  )
 
   const selectedSales = useMemo(
     () => sales.filter((sale) => selectedSaleIds.includes(sale.id)),
@@ -534,7 +554,9 @@ export default function QuotePage() {
   )
   const allFilteredSalesSelected = filteredSales.length > 0 && filteredSales.every((sale) => selectedSaleIds.includes(sale.id))
   const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
-  const hasSalesFilters = Boolean(salesSearch.trim() || salesStatusFilter !== 'all' || salesDateFrom || salesDateTo)
+  const hasSalesFilters = Boolean(
+    salesSearch.trim() || salesStatusFilter !== 'all' || salesDateFrom || salesDateTo || salesDateFilterMode === 'monthly',
+  )
 
   useEffect(() => {
     if (selectAllSalesRef.current) {
@@ -567,9 +589,11 @@ export default function QuotePage() {
   const resetSalesFilters = () => {
     setSalesSearch('')
     setSalesStatusFilter('all')
-    setSalesDateField('quoteDate')
+    setSalesDateFilterMode('daily')
     setSalesDateFrom('')
     setSalesDateTo('')
+    setSalesQuoteYear(today().slice(0, 4))
+    setSalesQuoteMonth('')
   }
 
   const writeAppHistory = useCallback((navigation, mode = 'push') => {
@@ -1382,12 +1406,47 @@ export default function QuotePage() {
                   {salesSaveState !== 'idle' && <span className={`sales-save-status sales-list-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                 </div>
                 {salesAdvancedSearchOpen && (
-                  <div className="sales-advanced-filters">
-                    <label className="field sales-date-filter"><span>일자 기준</span><select value={salesDateField} onChange={(event) => setSalesDateField(event.target.value)}>{SALES_DATE_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></label>
-                    <label className="field sales-date-filter"><span>시작일</span><input type="date" value={salesDateFrom} onClick={openNativeDatePicker} onChange={(event) => setSalesDateFrom(event.target.value)} /></label>
-                    <span className="sales-date-range-mark">~</span>
-                    <label className="field sales-date-filter"><span>종료일</span><input type="date" value={salesDateTo} onClick={openNativeDatePicker} onChange={(event) => setSalesDateTo(event.target.value)} /></label>
-                  </div>
+                  <>
+                    <div className="sales-advanced-filters">
+                      <div className="sales-date-filter-basis"><span>조회 기준</span><strong>견적일</strong></div>
+                      <div className="sales-period-mode" role="group" aria-label="견적일 조회 방식">
+                        <button type="button" className={salesDateFilterMode === 'daily' ? 'is-active' : ''} aria-pressed={salesDateFilterMode === 'daily'} onClick={() => setSalesDateFilterMode('daily')}>일별</button>
+                        <button type="button" className={salesDateFilterMode === 'monthly' ? 'is-active' : ''} aria-pressed={salesDateFilterMode === 'monthly'} onClick={() => setSalesDateFilterMode('monthly')}>월별</button>
+                      </div>
+                      {salesDateFilterMode === 'daily' ? (
+                        <>
+                          <label className="field sales-date-filter"><span>시작일</span><input type="date" value={salesDateFrom} onClick={openNativeDatePicker} onChange={(event) => setSalesDateFrom(event.target.value)} /></label>
+                          <span className="sales-date-range-mark">~</span>
+                          <label className="field sales-date-filter"><span>종료일</span><input type="date" value={salesDateTo} onClick={openNativeDatePicker} onChange={(event) => setSalesDateTo(event.target.value)} /></label>
+                        </>
+                      ) : (
+                        <div className="sales-month-filter-fields">
+                          <label className="field sales-date-filter"><span>연도</span><select value={salesQuoteYear} onChange={(event) => setSalesQuoteYear(event.target.value)}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
+                          <label className="field sales-date-filter"><span>월</span><select value={salesQuoteMonth} onChange={(event) => setSalesQuoteMonth(event.target.value)}><option value="">전체 월</option>{monthlyQuoteSales.map((month) => <option key={month.month} value={month.month}>{month.label}</option>)}</select></label>
+                        </div>
+                      )}
+                    </div>
+                    <section className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
+                      <div className="sales-monthly-summary-head">
+                        <div><strong>{salesQuoteYear}년 월별 견적 매출</strong><span>견적일 · 견적합계 기준{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span></div>
+                        <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
+                      </div>
+                      <div className="sales-monthly-summary-grid">
+                        {monthlyQuoteSales.map((month) => (
+                          <button
+                            type="button"
+                            key={month.month}
+                            className={`sales-monthly-summary-item${salesDateFilterMode === 'monthly' && salesQuoteMonth === month.month ? ' is-selected' : ''}`}
+                            aria-pressed={salesDateFilterMode === 'monthly' && salesQuoteMonth === month.month}
+                            onClick={() => { setSalesDateFilterMode('monthly'); setSalesQuoteMonth(month.month) }}
+                            title={`${salesQuoteYear}년 ${month.label} 견적 목록 보기`}
+                          >
+                            <span>{month.label}</span><strong>{money(month.totalGross)}</strong><small>{month.saleCount}건</small>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </>
                 )}
 
                 {filteredSales.length ? (
