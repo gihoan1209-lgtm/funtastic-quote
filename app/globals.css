@@ -484,8 +484,11 @@ body {
 .status-pending { color: #7a5c15; background: #fff4d7; }
 .status-in-progress { color: #176287; background: #e8f5fb; }
 .status-completed { color: #17613d; background: #eaf6ed; }
-.tracking-status-summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; min-width: 96px; }
+.tracking-status-summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-width: 96px; }
+.tracking-status-item { display: grid; justify-items: center; gap: 3px; }
 .tracking-status-summary .status-badge { min-height: 22px; padding: 3px 6px; font-size: 10px; }
+.tracking-status-date { width: 96px; min-height: 22px; padding: 1px 3px; border: 0; border-bottom: 1px solid #d7e1d9; border-radius: 0; background: transparent; color: var(--text2); font-family: inherit; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; cursor: pointer; }
+.tracking-status-date:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .status-tracking-before { color: #5c665e; background: #edf0ed; }
 .status-tracking-completed { color: #17613d; background: #eaf6ed; }
 .status-tracking-more { color: var(--text2); background: var(--surface-muted); }

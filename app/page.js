@@ -152,13 +152,14 @@ const trackingStatusItems = (rows, type) => {
   const isShipment = type === 'shipment'
   const beforeLabel = isShipment ? '출고전' : '입금전'
   const completedLabel = isShipment ? '출고완료' : '입금완료'
-  const sourceRows = Array.isArray(rows) && rows.length ? rows : [{ id: 'default', status: 'before' }]
+  const sourceRows = Array.isArray(rows) && rows.length ? rows : [{ id: 1, status: 'before', date: '' }]
   const items = sourceRows.slice(0, 2).map((row, index) => {
     const completed = row?.status === 'completed'
     return {
       id: String(row?.id ?? index),
       rowId: row?.id ?? index,
       status: completed ? 'completed' : 'before',
+      date: String(row?.date ?? ''),
       label: completed ? completedLabel : beforeLabel,
       className: completed ? 'status-tracking-completed' : 'status-tracking-before',
     }
@@ -864,10 +865,21 @@ export default function QuotePage() {
     const createRow = isShipment ? createShipment : createPayment
     updateSaleFromList(saleId, (sale) => ({
       ...sale,
+      [field]: normalizedTrackingRows(sale[field], createRow).map((row) => {
+        if (String(row.id) !== String(trackingId)) return row
+        const status = row.status === 'completed' ? 'before' : 'completed'
+        return { ...row, status, date: status === 'completed' && !row.date ? today() : row.date }
+      }),
+    }))
+  }
+  const updateTrackingDateFromList = (saleId, type, trackingId, date) => {
+    const isShipment = type === 'shipment'
+    const field = isShipment ? 'shipments' : 'payments'
+    const createRow = isShipment ? createShipment : createPayment
+    updateSaleFromList(saleId, (sale) => ({
+      ...sale,
       [field]: normalizedTrackingRows(sale[field], createRow).map((row) => (
-        String(row.id) === String(trackingId)
-          ? { ...row, status: row.status === 'completed' ? 'before' : 'completed' }
-          : row
+        String(row.id) === String(trackingId) ? { ...row, date } : row
       )),
     }))
   }
@@ -1399,8 +1411,26 @@ export default function QuotePage() {
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(quoteDateForList(sale))}</td>
                               <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 상태 변경`} title="상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>
-                              <td><div className="tracking-status-summary">{shipmentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} key={trackingStatus.id} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '출고전' : '출고완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'shipment', trackingStatus.rowId) }}>{trackingStatus.label}</button>)}</div></td>
-                              <td><div className="tracking-status-summary">{paymentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} key={trackingStatus.id} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '입금전' : '입금완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'payment', trackingStatus.rowId) }}>{trackingStatus.label}</button>)}</div></td>
+                              <td>
+                                <div className="tracking-status-summary">
+                                  {shipmentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : (
+                                    <div className="tracking-status-item" key={trackingStatus.id}>
+                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '출고전' : '출고완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'shipment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
+                                      <input type="date" className="tracking-status-date" value={trackingStatus.date} onClick={(event) => { event.stopPropagation(); openNativeDatePicker(event) }} onChange={(event) => { event.stopPropagation(); updateTrackingDateFromList(sale.id, 'shipment', trackingStatus.rowId, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 출고일`} title="출고일 변경 시 바로 저장됩니다" />
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td>
+                                <div className="tracking-status-summary">
+                                  {paymentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : (
+                                    <div className="tracking-status-item" key={trackingStatus.id}>
+                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '입금전' : '입금완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'payment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
+                                      <input type="date" className="tracking-status-date" value={trackingStatus.date} onClick={(event) => { event.stopPropagation(); openNativeDatePicker(event) }} onChange={(event) => { event.stopPropagation(); updateTrackingDateFromList(sale.id, 'payment', trackingStatus.rowId, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 입금일`} title="입금일 변경 시 바로 저장됩니다" />
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
                               <td className="sales-client">{sale.clientName || '거래처 미입력'}</td>
                               <td>{firstItem}</td>
                               <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
