@@ -656,8 +656,9 @@ body {
 .sales-client-copy-button { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 4px 8px; border-radius: 6px; color: var(--text2); font-size: 11px; font-weight: 700; line-height: 1; text-decoration: none; white-space: nowrap; }
 .sales-client-copy-button.is-copied { border-color: #b9d9c0; color: #17613d; background: #eaf6ed; }
 .sales-client-copy-button.is-error { border-color: #e8b4b4; color: #9c332a; background: #fbeceb; }
-.sales-core-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
-.sales-tax-email-field { grid-column: span 2; }
+.sales-core-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
+.sales-core-fields > .field { grid-column: span 2; }
+.sales-tax-email-field, .sales-contact-field { grid-column: span 3 !important; }
 .tracking-card { display: grid; align-content: start; gap: 10px; }
 .tracking-card-header { display: block; padding-bottom: 8px; border-bottom: 1px solid #e0e9e1; }
 .tracking-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
@@ -917,7 +918,8 @@ body {
 
 @media (max-width: 520px) {
   .sales-core-fields { grid-template-columns: 1fr; }
-  .sales-tax-email-field { grid-column: auto; }
+  .sales-core-fields > .field { grid-column: auto; }
+  .sales-tax-email-field, .sales-contact-field { grid-column: auto !important; }
   .sales-advanced-filters { grid-template-columns: 1fr; }
   .tracking-row-top { grid-template-columns: minmax(0, 1fr) auto; }
   .tracking-status-buttons { grid-column: 1 / -1; grid-row: 2; }

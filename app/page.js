@@ -1072,6 +1072,12 @@ export default function QuotePage() {
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
   const copySelectedSale = () => openCopiedSale(selectedSale)
+  const copySelectedSaleFromList = () => {
+    if (selectedSales.length !== 1) return
+    const [sourceSale] = selectedSales
+    setSelectedSaleIds([])
+    openCopiedSale(sourceSale)
+  }
   const copySelectedClientInfo = async () => {
     if (!selectedSale) return
     const copied = await copyTextToClipboard(clientInfoClipboardText(selectedSale))
@@ -1343,6 +1349,7 @@ export default function QuotePage() {
                   <p>거래처와 품목을 관리하고, 확정된 내용을 견적서로 바로 보냅니다.</p>
                 </div>
                 <div className="sales-heading-actions">
+                  <button className="btn-light sales-heading-action" onClick={copySelectedSaleFromList} disabled={selectedSales.length !== 1} title="영업건 1건을 선택하면 거래처와 품목을 복사해 새 영업건을 만듭니다">선택 영업건 복사</button>
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('selected')} disabled={!selectedSales.length}>선택 엑셀 다운로드 ({selectedSales.length})</button>
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('all')} disabled={!sales.length}>전체 엑셀 다운로드</button>
                   <button className="btn-light btn-del sales-heading-action" onClick={deleteSelectedSalesFromList} disabled={!selectedSales.length}>선택 삭제 ({selectedSales.length})</button>
@@ -1467,7 +1474,7 @@ export default function QuotePage() {
                     <label className="field"><span>대표자</span><input value={selectedSale.representativeName} onChange={(event) => updateSaleField('representativeName', event.target.value)} placeholder="대표자명" autoComplete="name" /></label>
                     <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
                     <label className="field sales-tax-email-field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
-                    <label className="field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
+                    <label className="field sales-contact-field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
                   </div>
                 </section>
 
