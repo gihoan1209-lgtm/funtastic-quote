@@ -4,6 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { calculateSaleItem, calculateSaleTotals } from '../lib/sales-calculations.mjs'
 import { calculateQuoteItem, calculateQuoteTotals, quoteItemsFromSale } from '../lib/quote-calculations.mjs'
 import {
+  formatGroupedNumber,
+  isNonNegativeInput as nonNegativeInput,
+  parseNumericClipboardRow,
+  ungroupNumber,
+} from '../lib/numeric-input.mjs'
+import {
   applyCatalogItemToSaleItem,
   catalogItemsFromWorksheetRows,
   normalizeCatalogItem,
@@ -46,18 +52,6 @@ const today = () => new Date().toISOString().slice(0, 10)
 const comma = (value) => Math.round(Number(value) || 0).toLocaleString('ko-KR')
 const money = (value) => value == null ? '—' : `₩ ${comma(value)}`
 const percent = (value) => value == null ? '—' : `${(value * 100).toFixed(1)}%`
-const ungroupNumber = (value) => String(value ?? '').replaceAll(',', '')
-const formatGroupedNumber = (value) => {
-  const raw = ungroupNumber(value)
-  if (!raw || !/^\d+(?:\.\d*)?$/.test(raw)) return raw
-  const [integer, decimal] = raw.split('.')
-  const formattedInteger = Number(integer).toLocaleString('ko-KR')
-  return decimal === undefined ? formattedInteger : `${formattedInteger}.${decimal}`
-}
-const nonNegativeInput = (value) => {
-  const raw = ungroupNumber(value)
-  return raw === '' || (/^\d+(?:\.\d*)?$/.test(raw) && Number.isFinite(Number(raw)) && Number(raw) >= 0)
-}
 const cleanOption = (value) => String(value ?? '').trim().toUpperCase() === 'EA' ? '' : String(value ?? '')
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const openNativeDatePicker = (event) => {
@@ -75,6 +69,40 @@ const formatShortDate = (date) => {
   if (!date) return '-'
   const [, month = '', day = ''] = date.split('-')
   return `${Number(month)}.${Number(day)}`
+}
+
+const clientInfoClipboardText = (sale = {}) => [
+  `거래처명: ${String(sale.clientName ?? '').trim()}`,
+  `대표자: ${String(sale.representativeName ?? '').trim()}`,
+  `사업자번호: ${String(sale.businessRegistrationNumber ?? '').trim()}`,
+  `세금계산서 이메일: ${String(sale.taxInvoiceEmail ?? '').trim()}`,
+  `연락처: ${String(sale.contactPhone ?? '').trim()}`,
+].join('\n')
+
+const copyTextToClipboard = async (text) => {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // Fall back to the document command for browsers that deny Clipboard API access.
+  }
+
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.append(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    textarea.remove()
+    return copied
+  } catch {
+    return false
+  }
 }
 
 const createItem = (id = 1, values = {}) => ({
@@ -147,6 +175,7 @@ const normalizeSaleRecord = (sale = {}) => {
     ...record,
     saleDate: String(record.saleDate || createdDate || record.quoteDate || today()),
     clientName: String(record.clientName ?? ''),
+    representativeName: String(record.representativeName ?? ''),
     contactPhone: String(record.contactPhone ?? ''),
     businessRegistrationNumber: String(record.businessRegistrationNumber ?? ''),
     taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
@@ -359,6 +388,7 @@ const createSale = () => {
     saleDate: today(),
     quoteDate: today(),
     clientName: '',
+    representativeName: '',
     contactName: '',
     contactPhone: '',
     businessRegistrationNumber: '',
@@ -384,6 +414,7 @@ const createCopiedSale = (source = {}) => {
   return {
     ...sale,
     clientName: String(source.clientName ?? ''),
+    representativeName: String(source.representativeName ?? ''),
     contactName: String(source.contactName ?? ''),
     contactPhone: String(source.contactPhone ?? ''),
     businessRegistrationNumber: String(source.businessRegistrationNumber ?? ''),
@@ -434,6 +465,7 @@ export default function QuotePage() {
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
+  const [clientInfoCopyState, setClientInfoCopyState] = useState('idle')
   const [salesHydrated, setSalesHydrated] = useState(false)
   const [costCatalog, setCostCatalog] = useState([])
   const [costCatalogMeta, setCostCatalogMeta] = useState(null)
@@ -446,6 +478,7 @@ export default function QuotePage() {
   const salesRef = useRef([])
   const appViewRef = useRef(null)
   const selectAllSalesRef = useRef(null)
+  const clientInfoCopyTimerRef = useRef(null)
 
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
@@ -483,7 +516,7 @@ export default function QuotePage() {
     return sales.filter((sale) => {
       const matchesStatus = salesStatusFilter === 'all' || sale.status === salesStatusFilter
       const itemSearchTerms = (sale.items || []).flatMap((item) => [item?.name, item?.productCode, item?.spec])
-      const matchesSearch = !query || [sale.clientName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, ...itemSearchTerms]
+      const matchesSearch = !query || [sale.clientName, sale.representativeName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, ...itemSearchTerms]
         .join(' ')
         .toLocaleLowerCase('ko-KR')
         .includes(query)
@@ -750,6 +783,10 @@ export default function QuotePage() {
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
   }, [salesSaveState])
 
+  useEffect(() => () => {
+    if (clientInfoCopyTimerRef.current) window.clearTimeout(clientInfoCopyTimerRef.current)
+  }, [])
+
   const persistQuotes = (nextQuotes) => {
     setSavedQuotes(nextQuotes)
     try {
@@ -855,6 +892,12 @@ export default function QuotePage() {
         return nextItem
       }),
     }))
+  }
+  const handleNumericPaste = (event, fields, updateField) => {
+    const pastedValues = parseNumericClipboardRow(event.clipboardData?.getData('text') ?? '')
+    event.preventDefault()
+    if (!pastedValues || pastedValues.length > fields.length) return
+    pastedValues.forEach((value, index) => updateField(fields[index], value))
   }
   const addSaleItem = () => updateSelectedSale((sale) => ({
     ...sale,
@@ -1029,6 +1072,13 @@ export default function QuotePage() {
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
   const copySelectedSale = () => openCopiedSale(selectedSale)
+  const copySelectedClientInfo = async () => {
+    if (!selectedSale) return
+    const copied = await copyTextToClipboard(clientInfoClipboardText(selectedSale))
+    setClientInfoCopyState(copied ? 'copied' : 'error')
+    if (clientInfoCopyTimerRef.current) window.clearTimeout(clientInfoCopyTimerRef.current)
+    clientInfoCopyTimerRef.current = window.setTimeout(() => setClientInfoCopyState('idle'), 1600)
+  }
 
   const openSale = (saleId) => {
     setSalesSaveState('idle')
@@ -1398,11 +1448,25 @@ export default function QuotePage() {
                     <label className="field"><span>견적일</span><input type="date" value={selectedSale.quoteDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('quoteDate', event.target.value)} /></label>
                     <label className="field"><span>납기 희망일</span><input type="date" value={selectedSale.requestedDueDate} onClick={openNativeDatePicker} onChange={(event) => updateSaleField('requestedDueDate', event.target.value)} /></label>
                   </div>
-                  <div className="sales-core-heading"><h2>거래처 정보</h2></div>
+                  <div className="sales-core-heading">
+                    <h2>거래처 정보</h2>
+                    <a
+                      className={`btn-light sales-client-copy-button${clientInfoCopyState === 'copied' ? ' is-copied' : clientInfoCopyState === 'error' ? ' is-error' : ''}`}
+                      href="#client-info-copy"
+                      role="button"
+                      onClick={(event) => { event.preventDefault(); copySelectedClientInfo() }}
+                      onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); copySelectedClientInfo() } }}
+                      aria-label="거래처 정보 전체 복사"
+                      title="거래처명, 대표자, 사업자번호, 세금계산서 이메일, 연락처를 복사합니다"
+                    >
+                      {clientInfoCopyState === 'copied' ? '복사됨' : clientInfoCopyState === 'error' ? '복사 실패' : '전체 복사'}
+                    </a>
+                  </div>
                   <div className="form-fields sales-core-fields">
                     <label className="field"><span>거래처명 <em>*</em></span><input value={selectedSale.clientName} onChange={(event) => updateSaleField('clientName', event.target.value)} /></label>
+                    <label className="field"><span>대표자</span><input value={selectedSale.representativeName} onChange={(event) => updateSaleField('representativeName', event.target.value)} placeholder="대표자명" autoComplete="name" /></label>
                     <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
-                    <label className="field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
+                    <label className="field sales-tax-email-field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
                     <label className="field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
                   </div>
                 </section>
@@ -1446,7 +1510,7 @@ export default function QuotePage() {
                               <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>
                             </div>
                             <div className="tracking-row-fields tracking-payment-fields">
-                              <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(payment.amount)} onChange={(event) => updatePayment(payment.id, 'amount', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                              <label className="tracking-amount-field"><span>입금액 (선택)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(payment.amount)} onChange={(event) => updatePayment(payment.id, 'amount', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['amount'], (field, value) => updatePayment(payment.id, field, value))} placeholder="0" /><span>원</span></div></label>
                               <label className="tracking-date-field"><span>입금일</span><input type="date" value={payment.date} onClick={openNativeDatePicker} onChange={(event) => updatePayment(payment.id, 'date', event.target.value)} /></label>
                             </div>
                           </div>
@@ -1541,10 +1605,10 @@ export default function QuotePage() {
                               </div>
                             </td>
                             <td><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션" aria-label={`품목 ${index + 1} 옵션`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} placeholder="도매가" aria-label={`품목 ${index + 1} 도매가`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['qty', 'cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="도매가" aria-label={`품목 ${index + 1} 도매가`} /></td>
+                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
                             <td className="sales-margin-metric">{percent(margin.discountRate)}</td>
                             <td className="sales-margin-metric">{money(margin.unitVat)}</td>
                             <td className={`sales-margin-metric sales-margin-profit-value ${margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}`}>{money(margin.unitProfit)}</td>
@@ -1566,8 +1630,8 @@ export default function QuotePage() {
                   </div>
                   <div className="total-shipping-bar">
                     <strong>배송비</strong>
-                    <label className="margin-shipping-field"><span>받은 배송비 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
-                    <label className="margin-shipping-field"><span>실 배송비 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} placeholder="0" /><span>원</span></div></label>
+                    <label className="margin-shipping-field"><span>받은 배송비 (+)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingFee)} onChange={(event) => updateSaleField('shippingFee', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['shippingFee'], updateSaleField)} placeholder="0" /><span>원</span></div></label>
+                    <label className="margin-shipping-field"><span>실 배송비 (-)</span><div className="input-with-unit"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(selectedSale.shippingCost)} onChange={(event) => updateSaleField('shippingCost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['shippingCost'], updateSaleField)} placeholder="0" /><span>원</span></div></label>
                     <label className="check-label" title="받는 배송비를 견적서와 매출에 반영"><input type="checkbox" checked={Boolean(selectedSale.includeShipping)} onChange={(event) => updateSaleField('includeShipping', event.target.checked)} />견적서 반영</label>
                     <label className="check-label" title="받는 배송비 VAT 포함"><input type="checkbox" checked={Boolean(selectedSale.shippingVatIncluded)} onChange={(event) => updateSaleField('shippingVatIncluded', event.target.checked)} disabled={!selectedSale.includeShipping} />VAT 포함</label>
                   </div>
@@ -1647,10 +1711,10 @@ export default function QuotePage() {
                             <td data-label="품목코드"><input aria-label="품목코드" value={item.productCode} onChange={(event) => updateCostCatalogItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" /></td>
                             <td data-label="품목명"><input aria-label="품목명" value={item.name} onChange={(event) => updateCostCatalogItem(item.id, 'name', event.target.value)} placeholder="품목명" /></td>
                             <td data-label="규격"><input aria-label="규격" value={item.spec} onChange={(event) => updateCostCatalogItem(item.id, 'spec', event.target.value)} placeholder="규격" /></td>
-                            <td data-label="특가 (元) · J"><input aria-label="특가 위안화 J열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.specialPriceYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', ungroupNumber(event.target.value))} placeholder="-" /></td>
-                            <td data-label="신규원가 (元) · K"><input aria-label="신규원가 위안화 K열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCostYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', ungroupNumber(event.target.value))} placeholder="-" /></td>
-                            <td data-label="works 기존 원가 (N)"><input aria-label="works 기존 원가 N열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.existingCost)} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', ungroupNumber(event.target.value))} placeholder="-" /></td>
-                            <td data-label="works 신규 원가 (O)"><input aria-label="works 신규 원가 O열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCost)} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', ungroupNumber(event.target.value))} placeholder="-" /></td>
+                            <td data-label="특가 (元) · J"><input aria-label="특가 위안화 J열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.specialPriceYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'specialPriceYuan', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['specialPriceYuan', 'newCostYuan', 'existingCost', 'newCost'], (field, value) => updateCostCatalogItem(item.id, field, value))} placeholder="-" /></td>
+                            <td data-label="신규원가 (元) · K"><input aria-label="신규원가 위안화 K열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCostYuan)} onChange={(event) => updateCostCatalogItem(item.id, 'newCostYuan', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['newCostYuan', 'existingCost', 'newCost'], (field, value) => updateCostCatalogItem(item.id, field, value))} placeholder="-" /></td>
+                            <td data-label="works 기존 원가 (N)"><input aria-label="works 기존 원가 N열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.existingCost)} onChange={(event) => updateCostCatalogItem(item.id, 'existingCost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['existingCost', 'newCost'], (field, value) => updateCostCatalogItem(item.id, field, value))} placeholder="-" /></td>
+                            <td data-label="works 신규 원가 (O)"><input aria-label="works 신규 원가 O열" className="number-input formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.newCost)} onChange={(event) => updateCostCatalogItem(item.id, 'newCost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['newCost'], (field, value) => updateCostCatalogItem(item.id, field, value))} placeholder="-" /></td>
                             <td data-label="적용 원가" className="amount cost-apply-cell">{money(item.cost)}</td>
                             <td data-label="관리" className="center cost-delete-cell"><button className="btn-light btn-del" onClick={() => deleteCostCatalogItem(item.id)}>×</button></td>
                           </tr>
@@ -1738,8 +1802,8 @@ export default function QuotePage() {
                         <td className="center">{index + 1}</td>
                         <td className="item-name-cell"><textarea className="editable item-name" data-autosize="true" value={item.name} onChange={(event) => updateItem(item.id, 'name', event.target.value)} placeholder="품명" aria-label={`품목 ${index + 1} 품명`} rows={1} wrap="soft" onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
                         <td className="center spec-cell"><textarea className="editable item-option" data-autosize="true" value={item.spec} onChange={(event) => updateItem(item.id, 'spec', event.target.value)} aria-label={`품목 ${index + 1} 옵션`} rows={1} wrap="soft" onInput={(event) => resizeTextArea(event.currentTarget)} /></td>
-                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateItem(item.id, 'qty', ungroupNumber(event.target.value))} /></td>
-                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateItem(item.id, 'price', ungroupNumber(event.target.value))} /></td>
+                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateItem(item.id, 'qty', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['qty', 'price'], (field, value) => updateItem(item.id, field, value))} /></td>
+                        <td><input className="editable num formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateItem(item.id, 'price', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['price'], (field, value) => updateItem(item.id, field, value))} /></td>
                         <td className="num">{comma(supply)}</td>
                         <td className="center"><label className="quote-vat"><input className="no-print" type="checkbox" checked={Boolean(item.vatIncluded)} onChange={(event) => updateItem(item.id, 'vatIncluded', event.target.checked)} aria-label="단가에 VAT 포함" />{comma(vat)}</label></td>
                         <td><input className="editable" value={item.note} onChange={(event) => updateItem(item.id, 'note', event.target.value)} placeholder="" /></td>

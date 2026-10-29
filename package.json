@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/quote-calculations.test.mjs tests/sales-calculations.test.mjs tests/cost-catalog.test.mjs tests/sales-export.test.mjs"
+    "test": "node --test tests/quote-calculations.test.mjs tests/sales-calculations.test.mjs tests/cost-catalog.test.mjs tests/sales-export.test.mjs tests/numeric-input.test.mjs"
   },
   "dependencies": {
     "next": "14.2.35",
