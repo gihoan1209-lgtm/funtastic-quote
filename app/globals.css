@@ -415,10 +415,29 @@ body {
   border-bottom: 1px solid var(--border);
   background: #fff;
 }
-.sales-list-period { display: inline-flex; align-items: baseline; gap: 7px; color: var(--text); }
+.sales-list-period { display: inline-flex; align-items: center; gap: 7px; color: var(--text); }
 .sales-list-period strong { font-size: 14px; }
 .sales-list-period span { color: var(--text3); font-size: 13px; font-variant-numeric: tabular-nums; }
 .sales-workflow-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.sales-list-month-picker select { min-height: 30px; padding: 3px 25px 3px 8px; color: var(--text); border: 1px solid var(--border); border-radius: 6px; background: #fff; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.sales-list-month-picker select:focus-visible { border-color: var(--green); outline: 0; box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1); }
+.sales-workflow-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sales-workflow-month {
+  min-height: 24px;
+  padding: 3px 7px;
+  color: var(--text2);
+  border: 1px solid #d8e2da;
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+button.sales-workflow-month { cursor: pointer; }
+button.sales-workflow-month:hover { border-color: #9fbda6; background: #f4faf5; }
+button.sales-workflow-month:focus-visible { border-color: var(--green); outline: 2px solid var(--green); outline-offset: 2px; }
+.sales-workflow-progress .status-badge-action[aria-pressed="true"] { box-shadow: inset 0 0 0 1px currentColor; }
 .sales-download-control { display: inline-flex; align-items: center; gap: 6px; }
 .sales-download-control .btn-light { min-height: 38px; white-space: nowrap; }
 .sales-detail-toggle { min-height: 38px; white-space: nowrap; }

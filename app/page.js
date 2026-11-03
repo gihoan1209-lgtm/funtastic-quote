@@ -461,6 +461,7 @@ export default function QuotePage() {
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesQuoteYear, setSalesQuoteYear] = useState(() => today().slice(0, 4))
   const [salesQuoteMonth, setSalesQuoteMonth] = useState(() => today().slice(5, 7))
+  const [salesShowAllPeriods, setSalesShowAllPeriods] = useState(false)
   const [salesDetailedSearchOpen, setSalesDetailedSearchOpen] = useState(false)
   const [salesImportMessage, setSalesImportMessage] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
@@ -529,9 +530,12 @@ export default function QuotePage() {
   }, [sales, salesSearch, salesStatusFilter])
 
   const filteredSales = useMemo(() => {
-    return salesForQuotePeriod(salesMatchingSearchAndStatus, salesQuoteYear, salesQuoteMonth)
+    const periodSales = salesShowAllPeriods
+      ? salesMatchingSearchAndStatus
+      : salesForQuotePeriod(salesMatchingSearchAndStatus, salesQuoteYear, salesQuoteMonth)
+    return periodSales
       .sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
-  }, [salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear])
+  }, [salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear, salesShowAllPeriods])
 
   const salesQuoteYears = useMemo(
     () => quoteYearsForSales(sales, today().slice(0, 4)),
@@ -554,6 +558,28 @@ export default function QuotePage() {
     () => sales.filter((sale) => sale.status === 'inProgress').length,
     [sales],
   )
+  const inProgressSaleMonths = useMemo(() => {
+    const counts = new Map()
+    sales.forEach((sale) => {
+      if (sale.status !== 'inProgress') return
+      const match = quoteDateForList(sale).match(/^(\d{4})-(0[1-9]|1[0-2])/)
+      const period = match ? match[0] : 'unknown'
+      counts.set(period, (counts.get(period) || 0) + 1)
+    })
+    return [...counts.entries()]
+      .sort(([left], [right]) => {
+        if (left === 'unknown') return 1
+        if (right === 'unknown') return -1
+        return right.localeCompare(left)
+      })
+      .map(([period, count]) => ({
+        period,
+        year: period === 'unknown' ? '' : period.slice(0, 4),
+        month: period === 'unknown' ? '' : period.slice(5, 7),
+        label: period === 'unknown' ? '견적일 미입력' : `${period.slice(0, 4)}년 ${Number(period.slice(5, 7))}월`,
+        count,
+      }))
+  }, [sales])
   const blockedSaleCount = useMemo(
     () => sales.filter((sale) => sale.status === 'blocked').length,
     [sales],
@@ -562,12 +588,10 @@ export default function QuotePage() {
   const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
   const currentSalesQuoteYear = today().slice(0, 4)
   const currentSalesQuoteMonth = today().slice(5, 7)
-  const salesPeriodLabel = salesQuoteMonth
-    ? `${salesQuoteYear}년 ${Number(salesQuoteMonth)}월`
-    : `${salesQuoteYear}년 전체`
   const hasSalesFilters = Boolean(
     salesSearch.trim()
       || salesStatusFilter !== 'all'
+      || salesShowAllPeriods
       || (salesDetailedSearchOpen && (salesQuoteYear !== currentSalesQuoteYear || salesQuoteMonth !== currentSalesQuoteMonth)),
   )
 
@@ -604,6 +628,24 @@ export default function QuotePage() {
     setSalesStatusFilter('all')
     setSalesQuoteYear(today().slice(0, 4))
     setSalesQuoteMonth(today().slice(5, 7))
+    setSalesShowAllPeriods(false)
+  }
+
+  const showAllInProgressSales = () => {
+    setSalesSearch('')
+    setSalesStatusFilter('inProgress')
+    setSalesShowAllPeriods(true)
+    setSalesDetailedSearchOpen(false)
+  }
+
+  const showInProgressSalesForMonth = ({ year, month }) => {
+    if (!year || !month) return
+    setSalesSearch('')
+    setSalesStatusFilter('inProgress')
+    setSalesQuoteYear(year)
+    setSalesQuoteMonth(month)
+    setSalesShowAllPeriods(false)
+    setSalesDetailedSearchOpen(false)
   }
 
   const toggleSalesDetailedSearch = () => {
@@ -611,6 +653,7 @@ export default function QuotePage() {
       setSalesDetailedSearchOpen(false)
       setSalesQuoteYear(today().slice(0, 4))
       setSalesQuoteMonth(today().slice(5, 7))
+      setSalesShowAllPeriods(false)
       return
     }
 
@@ -1536,9 +1579,32 @@ export default function QuotePage() {
 
               <section className="sales-list-card">
                 <div className="sales-list-summary">
-                  <div className="sales-list-period"><strong>{salesPeriodLabel} 영업건</strong><span>{filteredSales.length}건</span></div>
+                  <div className="sales-list-period">
+                    {salesShowAllPeriods ? <strong>전체 기간 영업건</strong> : <>
+                      <strong>{salesQuoteYear}년</strong>
+                      <label className="sales-list-month-picker">
+                        <span className="visually-hidden">조회 월 선택</span>
+                        <select value={salesQuoteMonth} onChange={(event) => { setSalesQuoteMonth(event.target.value); setSalesShowAllPeriods(false) }} aria-label="조회 월 선택">
+                          <option value="">전체</option>
+                          {Array.from({ length: 12 }, (_, index) => {
+                            const month = String(index + 1).padStart(2, '0')
+                            return <option key={month} value={month}>{index + 1}월</option>
+                          })}
+                        </select>
+                      </label>
+                      <strong>영업건</strong>
+                    </>}
+                    <span>{filteredSales.length}건</span>
+                  </div>
                   <div className="sales-workflow-summary" aria-label="전체 영업 진행 상태">
-                    <span className="status-badge status-in-progress">전체 진행 중 {inProgressSaleCount}건</span>
+                    <div className="sales-workflow-progress">
+                      <button type="button" className="status-badge status-badge-action status-in-progress" aria-pressed={salesShowAllPeriods && salesStatusFilter === 'inProgress'} onClick={showAllInProgressSales} title="모든 월의 진행 중 영업건 보기">전체 진행 중 {inProgressSaleCount}건</button>
+                      {inProgressSaleMonths.map((summary) => (
+                        summary.year
+                          ? <button type="button" key={summary.period} className="sales-workflow-month" onClick={() => showInProgressSalesForMonth(summary)} title={`${summary.label} 진행 중 영업건 보기`}>{summary.label} {summary.count}건</button>
+                          : <span key={summary.period} className="sales-workflow-month">{summary.label} {summary.count}건</span>
+                      ))}
+                    </div>
                     <span className="status-badge status-blocked">진행 불가 {blockedSaleCount}건</span>
                   </div>
                 </div>
@@ -1574,12 +1640,12 @@ export default function QuotePage() {
                 {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
                   <div className="sales-monthly-summary-head">
                     <div className="sales-monthly-title">
-                      <label className="sales-monthly-year-picker"><span>연도</span><select value={salesQuoteYear} onChange={(event) => { setSalesQuoteYear(event.target.value); setSalesQuoteMonth('') }}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
+                      <label className="sales-monthly-year-picker"><span>연도</span><select value={salesQuoteYear} onChange={(event) => { setSalesQuoteYear(event.target.value); setSalesQuoteMonth(''); setSalesShowAllPeriods(false) }}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
                       <span>월별 견적 매출 · 견적일 · 견적합계 기준{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span>
                     </div>
                     <div className="sales-monthly-actions">
                       <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
-                      {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => setSalesQuoteMonth('')}>선택 연도 전체</button>}
+                      {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => { setSalesQuoteMonth(''); setSalesShowAllPeriods(false) }}>선택 연도 전체</button>}
                     </div>
                   </div>
                   <div className="sales-monthly-summary-grid">
@@ -1589,7 +1655,7 @@ export default function QuotePage() {
                         key={month.month}
                         className={`sales-monthly-summary-item${salesQuoteMonth === month.month ? ' is-selected' : ''}`}
                         aria-pressed={salesQuoteMonth === month.month}
-                        onClick={() => setSalesQuoteMonth(month.month)}
+                        onClick={() => { setSalesQuoteMonth(month.month); setSalesShowAllPeriods(false) }}
                         title={`${salesQuoteYear}년 ${month.label} 견적 목록 보기`}
                       >
                         <span>{month.label}</span><strong>{money(month.totalGross)}</strong><small>{month.saleCount}건</small>
