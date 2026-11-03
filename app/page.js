@@ -2032,7 +2032,7 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>견적합계</th><th>총순이익</th><th>순이익률</th><th>관리</th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>총매출</th><th>총원가</th><th>총순이익</th><th>순이익률</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
@@ -2074,9 +2074,9 @@ export default function QuotePage() {
                               <td>{firstItem}</td>
                               <td>{sale.items?.filter((item) => item.name?.trim()).length || 0}개</td>
                               <td className="amount">{money(saleTotals.totalGross)}</td>
+                              <td className="amount">{money(saleTotals.totalCost)}</td>
                               <td className={`amount ${profit != null && profit < 0 ? 'amount-negative' : ''}`}>{money(profit)}</td>
                               <td className={`amount ${profitRate != null && profitRate < 0 ? 'amount-negative' : ''}`}>{percent(profitRate)}</td>
-                              <td className="sales-row-action"><button type="button" className="table-link" onClick={(event) => { event.stopPropagation(); openCopiedSale(sale) }} aria-label={`${sale.clientName || '거래처 미입력'} 복사하여 새 영업건 만들기`}>복사</button></td>
                             </tr>
                           )
                         })}

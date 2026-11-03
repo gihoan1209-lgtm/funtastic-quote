@@ -576,9 +576,6 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-select-cell input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--green); vertical-align: middle; }
 .sales-client { color: var(--text) !important; font-weight: 700; }
 .amount { color: var(--text) !important; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
-.sales-row-action { text-align: center; }
-.table-link { padding: 4px 0; color: var(--green); border: 0; background: transparent; font-size: 12px; font-weight: 700; }
-.table-link:hover { color: var(--green-dark); text-decoration: underline; }
 .sales-list-status-select {
   min-width: 92px;
   min-height: 30px;
