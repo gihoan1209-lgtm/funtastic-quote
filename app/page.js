@@ -23,7 +23,7 @@ import {
   normalizeCatalogItem,
   searchCostCatalog,
 } from '../lib/cost-catalog.mjs'
-import { createSalesListWorkbook, salesRowsForExport } from '../lib/sales-export.mjs'
+import { createSalesListWorkbook, salesForExportDate, salesRowsForExport } from '../lib/sales-export.mjs'
 
 const QUOTE_STORAGE_KEY = 'funtastic-quote-history'
 const SALES_STORAGE_KEY = 'funtastic-sales-history'
@@ -352,6 +352,95 @@ const SalesStatusPicker = ({ value, onChange }) => {
   )
 }
 
+const SalesDownloadMenu = ({ allCount, selectedCount, onDownload }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [exportDate, setExportDate] = useState('')
+  const menuRef = useRef(null)
+  const triggerRef = useRef(null)
+  const firstOptionRef = useRef(null)
+
+  const closeMenu = (returnFocus = false) => {
+    setIsOpen(false)
+    if (returnFocus) window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  const openMenu = () => {
+    setIsOpen(true)
+    window.requestAnimationFrame(() => firstOptionRef.current?.focus())
+  }
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const closeOnOutsidePointer = (event) => {
+      if (!menuRef.current?.contains(event.target)) setIsOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault()
+        closeMenu(true)
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [isOpen])
+
+  const download = (scope, date = '') => {
+    onDownload(scope, date)
+    closeMenu(true)
+  }
+
+  return (
+    <div className="sales-download-menu" ref={menuRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="btn-light sales-download-trigger"
+        disabled={!allCount}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-controls="sales-download-options"
+        onClick={() => (isOpen ? closeMenu() : openMenu())}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            if (isOpen) firstOptionRef.current?.focus()
+            else openMenu()
+          } else if (event.key === 'Escape' && isOpen) {
+            event.preventDefault()
+            closeMenu(true)
+          }
+        }}
+      >
+        <span>엑셀 다운로드</span>
+        <svg className="sales-download-caret" viewBox="0 0 12 8" aria-hidden="true" focusable="false">
+          <path d="m1 1.5 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div id="sales-download-options" className="sales-download-options" role="dialog" aria-label="엑셀 다운로드 범위">
+          <button ref={firstOptionRef} type="button" onClick={() => download('all')}>
+            <span>전체 다운로드</span><small>{allCount}건</small>
+          </button>
+          <button type="button" disabled={!selectedCount} onClick={() => download('selected')}>
+            <span>선택 다운로드</span><small>{selectedCount}건</small>
+          </button>
+          <div className="sales-download-date">
+            <label>
+              <span>날짜별 다운로드</span>
+              <input type="date" value={exportDate} onClick={openNativeDatePicker} onChange={(event) => setExportDate(event.target.value)} aria-label="다운로드할 견적일" />
+            </label>
+            <button type="button" disabled={!exportDate} onClick={() => download('date', exportDate)}>다운로드</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SALES_SAVE_STATUS = {
   dirty: { label: '저장 필요', className: 'sales-save-status-dirty' },
   saved: { label: '저장되었습니다', className: 'sales-save-status-saved' },
@@ -465,7 +554,6 @@ export default function QuotePage() {
   const [salesDetailedSearchOpen, setSalesDetailedSearchOpen] = useState(false)
   const [salesImportMessage, setSalesImportMessage] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
-  const [salesDownloadScope, setSalesDownloadScope] = useState('all')
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
   const [clientInfoCopyState, setClientInfoCopyState] = useState('idle')
@@ -1341,11 +1429,15 @@ export default function QuotePage() {
     showSalesList()
   }
 
-  const downloadSalesList = (scope = 'selected') => {
-    const salesToExport = scope === 'all' ? sales : selectedSales
+  const downloadSalesList = (scope = 'selected', exportDate = '') => {
+    const salesToExport = scope === 'all'
+      ? sales
+      : scope === 'date'
+        ? salesForExportDate(sales, exportDate)
+        : selectedSales
     const rows = salesRowsForExport(salesToExport)
     if (!rows.length) {
-      window.alert('다운로드할 품목이 없습니다.')
+      window.alert(scope === 'date' ? '선택한 날짜에 다운로드할 품목이 없습니다.' : '다운로드할 품목이 없습니다.')
       return
     }
 
@@ -1357,7 +1449,12 @@ export default function QuotePage() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${scope === 'all' ? '전체영업목록' : '선택영업목록'}_${today().replaceAll('-', '')}.xlsx`
+      const filePrefix = scope === 'all'
+        ? '전체영업목록'
+        : scope === 'date'
+          ? `견적일_${exportDate.replaceAll('-', '')}_영업목록`
+          : '선택영업목록'
+      link.download = `${filePrefix}${scope === 'date' ? '' : `_${today().replaceAll('-', '')}`}.xlsx`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -1624,18 +1721,7 @@ export default function QuotePage() {
                     {salesDetailedSearchOpen ? '상세 검색 닫기' : '상세 검색'}
                   </button>
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
-                  <div className="sales-download-control" role="group" aria-label="엑셀 다운로드">
-                    <select value={salesDownloadScope} onChange={(event) => setSalesDownloadScope(event.target.value)} aria-label="엑셀 다운로드 범위">
-                      <option value="selected">선택 {selectedSales.length}건</option>
-                      <option value="all">전체 {sales.length}건</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="btn-light"
-                      disabled={salesDownloadScope === 'selected' ? !selectedSales.length : !sales.length}
-                      onClick={() => downloadSalesList(salesDownloadScope)}
-                    >엑셀 다운로드</button>
-                  </div>
+                  <SalesDownloadMenu allCount={sales.length} selectedCount={selectedSales.length} onDownload={downloadSalesList} />
                 </div>
                 {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
                   <div className="sales-monthly-summary-head">

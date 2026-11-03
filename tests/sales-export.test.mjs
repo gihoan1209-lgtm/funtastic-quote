@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { strFromU8, unzipSync } from 'fflate'
-import { SALES_EXPORT_HEADERS, createSalesListWorkbook, salesRowsForExport } from '../lib/sales-export.mjs'
+import { SALES_EXPORT_HEADERS, createSalesListWorkbook, salesForExportDate, salesRowsForExport } from '../lib/sales-export.mjs'
 
-test('sales export flattens visible sales into the requested seven columns', () => {
+test('sales export flattens visible sales into the requested eight columns', () => {
   const rows = salesRowsForExport([
     {
       clientName: '글로벌 아그로',
+      quoteDate: '2026-11-03',
       items: [
         { productCode: '001122-0001', name: '미누스 보냉가방', spec: '블랙', cost: '1,250', qty: '12', price: '2,500' },
         { productCode: '', name: '', spec: '', cost: '', qty: '', price: '' },
@@ -15,20 +16,32 @@ test('sales export flattens visible sales into the requested seven columns', () 
     },
     {
       clientName: '테스트 거래처',
+      saleDate: '2026-10-31',
       items: [{ productCode: '0002', name: '샘플', spec: 'ea', cost: 500, qty: 1, price: 900 }],
     },
   ])
 
-  assert.deepEqual(SALES_EXPORT_HEADERS, ['상품코드', '제품명', '옵션', '원가', '수량', '개당 판매가', '입금자'])
+  assert.deepEqual(SALES_EXPORT_HEADERS, ['상품코드', '제품명', '옵션', '원가', '수량', '개당 판매가', '입금자', '날짜'])
   assert.deepEqual(rows, [
-    { 상품코드: '001122-0001', 제품명: '미누스 보냉가방', 옵션: '블랙', 원가: 1250, 수량: 12, '개당 판매가': 2500, 입금자: '글로벌 아그로' },
-    { 상품코드: '0002', 제품명: '샘플', 옵션: '', 원가: 500, 수량: 1, '개당 판매가': 900, 입금자: '테스트 거래처' },
+    { 상품코드: '001122-0001', 제품명: '미누스 보냉가방', 옵션: '블랙', 원가: 1250, 수량: 12, '개당 판매가': 2500, 입금자: '글로벌 아그로', 날짜: '2026-11-03' },
+    { 상품코드: '0002', 제품명: '샘플', 옵션: '', 원가: 500, 수량: 1, '개당 판매가': 900, 입금자: '테스트 거래처', 날짜: '2026-10-31' },
   ])
+})
+
+test('sales export can be limited to one quote date', () => {
+  const sales = [
+    { id: 'nov-3', quoteDate: '2026-11-03', items: [] },
+    { id: 'nov-4', quoteDate: '2026-11-04', items: [] },
+    { id: 'legacy', saleDate: '2026-11-03', items: [] },
+  ]
+
+  assert.deepEqual(salesForExportDate(sales, '2026-11-03').map((sale) => sale.id), ['nov-3', 'legacy'])
+  assert.deepEqual(salesForExportDate(sales, 'not-a-date'), [])
 })
 
 test('sales export workbook contains a styled XLSX sheet with numeric amount cells', () => {
   const workbook = createSalesListWorkbook([
-    { 상품코드: '001', 제품명: 'A&B <샘플>', 옵션: '빨강', 원가: 1250, 수량: 12.5, '개당 판매가': 2500, 입금자: '거래처' },
+    { 상품코드: '001', 제품명: 'A&B <샘플>', 옵션: '빨강', 원가: 1250, 수량: 12.5, '개당 판매가': 2500, 입금자: '거래처', 날짜: '2026-11-03' },
   ])
   const files = unzipSync(workbook)
 
@@ -42,6 +55,8 @@ test('sales export workbook contains a styled XLSX sheet with numeric amount cel
   assert.match(sheet, /r="D2" s="2"><v>1250<\/v>/)
   assert.match(sheet, /r="E2" s="3"><v>12\.5<\/v>/)
   assert.match(sheet, /r="F2" s="2"><v>2500<\/v>/)
+  assert.match(sheet, /r="H2"[^>]*><is><t xml:space="preserve">2026-11-03<\/t><\/is><\/c>/)
+  assert.match(sheet, /autoFilter ref="A1:H2"/)
   assert.match(styles, /formatCode="#\,##0"/)
   assert.match(styles, /formatCode="#\,##0\.##"/)
 })
