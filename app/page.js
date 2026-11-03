@@ -2149,7 +2149,7 @@ export default function QuotePage() {
 
             <div className="notes">
               {notes.map((note, index) => (
-                <div key={`${index}-${note}`} className="note-item">
+                <div key={index} className="note-item">
                   <span className="note-prefix">※</span>
                   <textarea className="note-text" data-autosize="true" value={note} onChange={(event) => updateNote(index, event.target.value)} rows={1} onInput={(event) => resizeTextArea(event.currentTarget)} />
                   <button className="btn-light btn-del no-print" onClick={() => removeNote(index)}>×</button>
