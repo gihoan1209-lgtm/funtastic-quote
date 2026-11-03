@@ -14,6 +14,7 @@ import {
   quoteDateForList,
   quoteYearsForSales,
 } from '../lib/sales-monthly-summary.mjs'
+import { saleImportSignature, salesFromHistoryWorksheetRows } from '../lib/sales-history-import.mjs'
 import {
   applyCatalogItemToSaleItem,
   catalogItemsFromWorksheetRows,
@@ -454,12 +455,9 @@ export default function QuotePage() {
   const [selectedSaleId, setSelectedSaleId] = useState('')
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
-  const [salesAdvancedSearchOpen, setSalesAdvancedSearchOpen] = useState(false)
-  const [salesDateFilterMode, setSalesDateFilterMode] = useState('daily')
-  const [salesDateFrom, setSalesDateFrom] = useState('')
-  const [salesDateTo, setSalesDateTo] = useState('')
   const [salesQuoteYear, setSalesQuoteYear] = useState(() => today().slice(0, 4))
   const [salesQuoteMonth, setSalesQuoteMonth] = useState('')
+  const [salesImportMessage, setSalesImportMessage] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
@@ -473,6 +471,7 @@ export default function QuotePage() {
   const [costCatalogMessage, setCostCatalogMessage] = useState('')
   const [catalogSearchOpenItemId, setCatalogSearchOpenItemId] = useState('')
   const costFileInputRef = useRef(null)
+  const salesFileInputRef = useRef(null)
   const salesRef = useRef([])
   const appViewRef = useRef(null)
   const selectAllSalesRef = useRef(null)
@@ -524,16 +523,10 @@ export default function QuotePage() {
 
   const filteredSales = useMemo(() => {
     return salesMatchingSearchAndStatus.filter((sale) => {
-      const quoteDate = quoteDateForList(sale)
-      if (salesDateFilterMode === 'monthly') {
-        const quoteMonth = salesQuoteMonth ? `${salesQuoteYear}-${salesQuoteMonth}` : `${salesQuoteYear}-`
-        return Boolean(quoteDate && quoteDate.startsWith(quoteMonth))
-      }
-      const matchesStartDate = !salesDateFrom || (quoteDate && quoteDate >= salesDateFrom)
-      const matchesEndDate = !salesDateTo || (quoteDate && quoteDate <= salesDateTo)
-      return matchesStartDate && matchesEndDate
+      if (!salesQuoteMonth) return true
+      return quoteDateForList(sale).startsWith(`${salesQuoteYear}-${salesQuoteMonth}`)
     }).sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
-  }, [salesDateFilterMode, salesDateFrom, salesDateTo, salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear])
+  }, [salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear])
 
   const salesQuoteYears = useMemo(
     () => quoteYearsForSales(sales, today().slice(0, 4)),
@@ -555,7 +548,7 @@ export default function QuotePage() {
   const allFilteredSalesSelected = filteredSales.length > 0 && filteredSales.every((sale) => selectedSaleIds.includes(sale.id))
   const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
   const hasSalesFilters = Boolean(
-    salesSearch.trim() || salesStatusFilter !== 'all' || salesDateFrom || salesDateTo || salesDateFilterMode === 'monthly',
+    salesSearch.trim() || salesStatusFilter !== 'all' || salesQuoteMonth,
   )
 
   useEffect(() => {
@@ -589,9 +582,6 @@ export default function QuotePage() {
   const resetSalesFilters = () => {
     setSalesSearch('')
     setSalesStatusFilter('all')
-    setSalesDateFilterMode('daily')
-    setSalesDateFrom('')
-    setSalesDateTo('')
     setSalesQuoteYear(today().slice(0, 4))
     setSalesQuoteMonth('')
   }
@@ -997,6 +987,73 @@ export default function QuotePage() {
 
   const openCostFilePicker = () => costFileInputRef.current?.click()
 
+  const openSalesFilePicker = () => salesFileInputRef.current?.click()
+
+  const importSalesHistory = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setSalesImportMessage('엑셀 영업건을 확인하는 중입니다…')
+    try {
+      const { xlsxSheetsFromFile } = await import('../lib/xlsx-client.mjs')
+      const workbookSheets = await xlsxSheetsFromFile(file)
+      let parsedHistory = null
+      let matchedSheetName = ''
+      let lastError = null
+
+      for (const sheet of workbookSheets) {
+        try {
+          const candidate = salesFromHistoryWorksheetRows(sheet.rows)
+          if (candidate.sales.length) {
+            parsedHistory = candidate
+            matchedSheetName = sheet.name
+            break
+          }
+        } catch (error) {
+          lastError = error
+        }
+      }
+
+      if (!parsedHistory) throw lastError || new Error('가져올 수 있는 영업건 행이 없습니다.')
+
+      const existingSignatures = new Set(salesRef.current.map(saleImportSignature))
+      const importedAt = new Date().toISOString()
+      let skippedCount = 0
+      const additions = parsedHistory.sales.flatMap((record) => {
+        const sale = normalizeSaleRecord({
+          ...record,
+          id: makeId('sale'),
+          createdAt: importedAt,
+          updatedAt: importedAt,
+        })
+        const signature = saleImportSignature(sale)
+        if (existingSignatures.has(signature)) {
+          skippedCount += 1
+          return []
+        }
+        existingSignatures.add(signature)
+        return [sale]
+      })
+
+      if (!additions.length) {
+        setSalesImportMessage(`${matchedSheetName} 시트의 ${parsedHistory.sales.length.toLocaleString('ko-KR')}건은 이미 목록에 있습니다.`)
+        return
+      }
+
+      const saved = persistSales([...salesRef.current, ...additions])
+      setSelectedSaleIds([])
+      setSalesSaveState(saved ? 'saved' : 'error')
+      setSalesImportMessage(saved
+        ? `${matchedSheetName} 시트에서 ${additions.length.toLocaleString('ko-KR')}건 (${parsedHistory.itemRowCount.toLocaleString('ko-KR')}개 품목)을 가져왔습니다.${skippedCount ? ` 중복 ${skippedCount.toLocaleString('ko-KR')}건은 건너뛰었습니다.` : ''}`
+        : '화면에는 가져왔지만 브라우저 저장에 실패했습니다. 저장 공간을 확인해 주세요.')
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '알 수 없는 오류'
+      setSalesImportMessage('')
+      window.alert(`엑셀 영업건을 가져오지 못했습니다.\n${detail}`)
+    }
+  }
+
   const importCostCatalog = async (event) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -1373,6 +1430,7 @@ export default function QuotePage() {
       </header>
 
       <input ref={costFileInputRef} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importCostCatalog} />
+      <input ref={salesFileInputRef} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importSalesHistory} />
 
       {activeTab === 'sales' ? (
         <main className="sales-page">
@@ -1385,6 +1443,7 @@ export default function QuotePage() {
                   <p>거래처와 품목을 관리하고, 확정된 내용을 견적서로 바로 보냅니다.</p>
                 </div>
                 <div className="sales-heading-actions">
+                  <button className="btn-light sales-heading-action" onClick={openSalesFilePicker}>엑셀 영업건 가져오기</button>
                   <button className="btn-light sales-heading-action" onClick={copySelectedSaleFromList} disabled={selectedSales.length !== 1} title="영업건 1건을 선택하면 거래처와 품목을 복사해 새 영업건을 만듭니다">선택 영업건 복사</button>
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('selected')} disabled={!selectedSales.length}>선택 엑셀 다운로드 ({selectedSales.length})</button>
                   <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('all')} disabled={!sales.length}>전체 엑셀 다운로드</button>
@@ -1400,54 +1459,37 @@ export default function QuotePage() {
                     <option value="all">전체 상태</option>
                     {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
                   </select>
-                  <button type="button" className={`btn-light sales-filter-toggle${salesAdvancedSearchOpen ? ' is-active' : ''}`} onClick={() => setSalesAdvancedSearchOpen((current) => !current)} aria-expanded={salesAdvancedSearchOpen}>상세 검색</button>
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
                   <span className="sales-count">{filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
+                  {salesImportMessage && <span className="sales-import-message" role="status">{salesImportMessage}</span>}
                   {salesSaveState !== 'idle' && <span className={`sales-save-status sales-list-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                 </div>
-                {salesAdvancedSearchOpen && (
-                  <>
-                    <div className="sales-advanced-filters">
-                      <div className="sales-date-filter-basis"><span>조회 기준</span><strong>견적일</strong></div>
-                      <div className="sales-period-mode" role="group" aria-label="견적일 조회 방식">
-                        <button type="button" className={salesDateFilterMode === 'daily' ? 'is-active' : ''} aria-pressed={salesDateFilterMode === 'daily'} onClick={() => setSalesDateFilterMode('daily')}>일별</button>
-                        <button type="button" className={salesDateFilterMode === 'monthly' ? 'is-active' : ''} aria-pressed={salesDateFilterMode === 'monthly'} onClick={() => setSalesDateFilterMode('monthly')}>월별</button>
-                      </div>
-                      {salesDateFilterMode === 'daily' ? (
-                        <>
-                          <label className="field sales-date-filter"><span>시작일</span><input type="date" value={salesDateFrom} onClick={openNativeDatePicker} onChange={(event) => setSalesDateFrom(event.target.value)} /></label>
-                          <span className="sales-date-range-mark">~</span>
-                          <label className="field sales-date-filter"><span>종료일</span><input type="date" value={salesDateTo} onClick={openNativeDatePicker} onChange={(event) => setSalesDateTo(event.target.value)} /></label>
-                        </>
-                      ) : (
-                        <div className="sales-month-filter-fields">
-                          <label className="field sales-date-filter"><span>연도</span><select value={salesQuoteYear} onChange={(event) => setSalesQuoteYear(event.target.value)}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
-                          <label className="field sales-date-filter"><span>월</span><select value={salesQuoteMonth} onChange={(event) => setSalesQuoteMonth(event.target.value)}><option value="">전체 월</option>{monthlyQuoteSales.map((month) => <option key={month.month} value={month.month}>{month.label}</option>)}</select></label>
-                        </div>
-                      )}
+                <section className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
+                  <div className="sales-monthly-summary-head">
+                    <div className="sales-monthly-title">
+                      <label className="sales-monthly-year-picker"><span>연도</span><select value={salesQuoteYear} onChange={(event) => { setSalesQuoteYear(event.target.value); setSalesQuoteMonth('') }}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
+                      <span>월별 견적 매출 · 견적일 · 견적합계 기준{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span>
                     </div>
-                    <section className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
-                      <div className="sales-monthly-summary-head">
-                        <div><strong>{salesQuoteYear}년 월별 견적 매출</strong><span>견적일 · 견적합계 기준{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span></div>
-                        <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
-                      </div>
-                      <div className="sales-monthly-summary-grid">
-                        {monthlyQuoteSales.map((month) => (
-                          <button
-                            type="button"
-                            key={month.month}
-                            className={`sales-monthly-summary-item${salesDateFilterMode === 'monthly' && salesQuoteMonth === month.month ? ' is-selected' : ''}`}
-                            aria-pressed={salesDateFilterMode === 'monthly' && salesQuoteMonth === month.month}
-                            onClick={() => { setSalesDateFilterMode('monthly'); setSalesQuoteMonth(month.month) }}
-                            title={`${salesQuoteYear}년 ${month.label} 견적 목록 보기`}
-                          >
-                            <span>{month.label}</span><strong>{money(month.totalGross)}</strong><small>{month.saleCount}건</small>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  </>
-                )}
+                    <div className="sales-monthly-actions">
+                      <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
+                      {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => setSalesQuoteMonth('')}>전체 목록</button>}
+                    </div>
+                  </div>
+                  <div className="sales-monthly-summary-grid">
+                    {monthlyQuoteSales.map((month) => (
+                      <button
+                        type="button"
+                        key={month.month}
+                        className={`sales-monthly-summary-item${salesQuoteMonth === month.month ? ' is-selected' : ''}`}
+                        aria-pressed={salesQuoteMonth === month.month}
+                        onClick={() => setSalesQuoteMonth(month.month)}
+                        title={`${salesQuoteYear}년 ${month.label} 견적 목록 보기`}
+                      >
+                        <span>{month.label}</span><strong>{money(month.totalGross)}</strong><small>{month.saleCount}건</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
 
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
