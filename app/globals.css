@@ -1368,8 +1368,9 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   top: calc(100% + 5px);
   right: 0;
   left: 0;
-  max-height: 315px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid #bfd4c4;
   border-radius: 8px;
   background: #fff;
@@ -1387,8 +1388,10 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   font-size: 11px;
   line-height: 1.35;
 }
+.catalog-selection-heading-copy { display: grid; gap: 2px; min-width: 0; }
 .catalog-selection-heading strong { flex: 0 0 auto; color: var(--green-dark); font-size: 11px; }
-.catalog-suggestion-list { max-height: 315px; overflow-y: auto; }
+.catalog-selection-apply { min-height: 30px; padding: 5px 9px; flex: 0 0 auto; font-size: 11px; white-space: nowrap; }
+.catalog-suggestion-list { min-height: 0; max-height: 220px; overflow-y: auto; }
 .catalog-suggestion {
   display: flex;
   width: 100%;
@@ -1441,7 +1444,6 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   background: #fbfdfb;
 }
 .catalog-selection-footer > span { color: var(--text2); font-size: 10px; line-height: 1.35; }
-.catalog-selection-footer .btn { min-height: 30px; flex: 0 0 auto; padding: 5px 9px; font-size: 11px; white-space: nowrap; }
 .catalog-no-result { padding: 11px 12px; color: var(--text2); font-size: 12px; line-height: 1.5; }
 .catalog-search-field { position: relative; z-index: 2; }
 
@@ -1454,8 +1456,9 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   .cost-import-card { align-items: flex-start; flex-direction: column; padding: 16px; }
   .cost-import-actions { justify-content: flex-start; }
   .catalog-suggestion-select { align-items: flex-start; gap: 10px; }
+  .catalog-selection-heading { align-items: flex-start; flex-direction: column; }
+  .catalog-selection-apply { width: 100%; }
   .catalog-selection-footer { align-items: flex-start; flex-direction: column; }
-  .catalog-selection-footer .btn { width: 100%; }
 }
 
 @media (max-width: 400px) {

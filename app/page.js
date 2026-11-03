@@ -1909,7 +1909,10 @@ export default function QuotePage() {
                                   />
                                   {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="group" aria-label={`품목 ${index + 1} 검색 후보`}>
                                     {productCandidates.length ? <>
-                                      <div className="catalog-selection-heading"><span>옵션을 여러 개 선택한 뒤 한 번에 추가하세요.</span><strong aria-live="polite">{selectedCatalogItems.length}개 선택</strong></div>
+                                      <div className="catalog-selection-heading">
+                                        <div className="catalog-selection-heading-copy"><span>옵션을 체크한 뒤 선택 완료를 누르세요.</span><strong aria-live="polite">{selectedCatalogItems.length}개 선택</strong></div>
+                                        <button type="button" className="button-primary catalog-selection-apply" disabled={!selectedCatalogItems.length} onClick={() => selectCatalogItems(item.id, selectedCatalogItems)}>선택 완료 · {selectedCatalogItems.length}개 추가</button>
+                                      </div>
                                       <div className="catalog-suggestion-list">
                                         {productCandidates.map((catalogItem) => {
                                           const isSelected = selectedCatalogIds.includes(String(catalogItem.id))
@@ -1926,7 +1929,6 @@ export default function QuotePage() {
                                       </div>
                                       <div className="catalog-selection-footer">
                                         <span>첫 품목은 현재 행에, 나머지는 새 행에 추가됩니다.</span>
-                                        <button type="button" className="btn" disabled={!selectedCatalogItems.length} onClick={() => selectCatalogItems(item.id, selectedCatalogItems)}>선택한 옵션 {selectedCatalogItems.length}개 추가</button>
                                       </div>
                                     </> : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
                                   </div>}
