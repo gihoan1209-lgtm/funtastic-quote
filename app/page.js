@@ -2222,19 +2222,18 @@ export default function QuotePage() {
                     </colgroup>
                     <thead>
                       <tr className="sales-margin-group-row">
-                        <th colSpan={3} className="sales-margin-group-product">상품 정보</th>
-                        <th colSpan={3} className="sales-margin-group-purchase">매입</th>
-                        <th colSpan={2} className="sales-margin-group-sales">판매 조건</th>
-                        <th colSpan={3} className="sales-margin-group-profit">마진</th>
+                        <th colSpan={4} className="sales-margin-group-product">상품 정보</th>
+                        <th colSpan={5} className="sales-margin-group-pricing">원가판매가</th>
+                        <th colSpan={2} className="sales-margin-group-profit">마진</th>
                       </tr>
                       <tr className="sales-margin-label-row">
                         <th>코드</th>
                         <th>품목</th>
                         <th>옵션</th>
-                        <th>수량 <em>*</em></th>
-                        <th>개당 원가</th>
+                        <th className="sales-margin-key-input-label">수량 <em>*</em></th>
+                        <th className="sales-margin-key-input-label">개당 원가</th>
                         <th>도매가</th>
-                        <th>공급가 <em>*</em></th>
+                        <th className="sales-margin-key-input-label">공급가 <em>*</em></th>
                         <th>할인율</th>
                         <th>매출 부가세</th>
                         <th>개당 순이익</th>
@@ -2302,10 +2301,10 @@ export default function QuotePage() {
                               </div>
                             </td>
                             <td><input value={item.spec ?? ''} onChange={(event) => updateSaleItem(item.id, 'spec', event.target.value)} placeholder="옵션" aria-label={`품목 ${index + 1} 옵션`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['qty', 'cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
+                            <td className="sales-margin-key-input-cell"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.qty)} onChange={(event) => updateSaleItem(item.id, 'qty', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['qty', 'cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="수량" aria-label={`품목 ${index + 1} 수량`} /></td>
+                            <td className="sales-margin-key-input-cell"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.cost)} onChange={(event) => updateSaleItem(item.id, 'cost', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['cost', 'wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="원가" aria-label={`품목 ${index + 1} 개당 원가`} /></td>
                             <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.wholesalePrice)} onChange={(event) => updateSaleItem(item.id, 'wholesalePrice', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['wholesalePrice', 'price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="도매가" aria-label={`품목 ${index + 1} 도매가`} /></td>
-                            <td><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
+                            <td className="sales-margin-key-input-cell"><input className="formatted-number-input" type="text" inputMode="decimal" value={formatGroupedNumber(item.price)} onChange={(event) => updateSaleItem(item.id, 'price', ungroupNumber(event.target.value))} onPaste={(event) => handleNumericPaste(event, ['price'], (field, value) => updateSaleItem(item.id, field, value))} placeholder="공급가" aria-label={`품목 ${index + 1} 공급가`} /></td>
                             <td className="sales-margin-metric">{percent(margin.discountRate)}</td>
                             <td className="sales-margin-metric">{money(margin.unitVat)}</td>
                             <td className={`sales-margin-metric sales-margin-profit-value ${margin.unitProfit != null && margin.unitProfit < 0 ? 'amount-negative' : ''}`}>{money(margin.unitProfit)}</td>
