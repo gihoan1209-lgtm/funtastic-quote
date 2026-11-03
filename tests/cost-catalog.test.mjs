@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   applyCatalogItemToSaleItem,
+  applyCatalogItemsToSaleItems,
   asCost,
   catalogItemsFromWorksheetRows,
   normalizeCatalogItem,
@@ -116,4 +117,45 @@ test('selecting a catalog item takes a cost snapshot without touching sales quan
     catalogItemId: 'source-1',
     catalogCostSource: 'works 기존 원가',
   })
+})
+
+test('selecting several catalog options fills the current row and creates one row per remaining option', () => {
+  let nextId = 8
+  const result = applyCatalogItemsToSaleItems(
+    { id: 7, qty: '24', price: '8000', wholesalePrice: '9000', note: '공통 요청', vatIncluded: true },
+    [
+      { id: 'option-beige', productCode: '111226-0001', name: '미누스 보냉가방', spec: '베이지', newCost: 3236 },
+      { id: 'option-black', productCode: '111226-0001', name: '미누스 보냉가방', spec: '블랙', newCost: 3236 },
+      { id: 'option-beige', productCode: '111226-0001', name: '미누스 보냉가방', spec: '베이지', newCost: 3236 },
+    ],
+    () => ({ id: nextId++, qty: 1, price: '', wholesalePrice: '', vatIncluded: true }),
+  )
+
+  assert.deepEqual(result.currentItem, {
+    id: 7,
+    qty: '24',
+    price: '8000',
+    wholesalePrice: '9000',
+    note: '공통 요청',
+    vatIncluded: true,
+    productCode: '111226-0001',
+    name: '미누스 보냉가방',
+    spec: '베이지',
+    cost: '3236',
+    catalogItemId: 'option-beige',
+    catalogCostSource: 'works 신규 원가',
+  })
+  assert.deepEqual(result.additionalItems, [{
+    id: 8,
+    qty: 1,
+    price: '',
+    wholesalePrice: '',
+    vatIncluded: true,
+    productCode: '111226-0001',
+    name: '미누스 보냉가방',
+    spec: '블랙',
+    cost: '3236',
+    catalogItemId: 'option-black',
+    catalogCostSource: 'works 신규 원가',
+  }])
 })

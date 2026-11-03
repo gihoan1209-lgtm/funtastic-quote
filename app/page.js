@@ -17,6 +17,7 @@ import {
 import { saleImportSignature, salesFromHistoryWorksheetRows } from '../lib/sales-history-import.mjs'
 import {
   applyCatalogItemToSaleItem,
+  applyCatalogItemsToSaleItems,
   catalogItemsFromWorksheetRows,
   normalizeCatalogItem,
   searchCostCatalog,
@@ -470,6 +471,7 @@ export default function QuotePage() {
   const [costCatalogDirty, setCostCatalogDirty] = useState(false)
   const [costCatalogMessage, setCostCatalogMessage] = useState('')
   const [catalogSearchOpenItemId, setCatalogSearchOpenItemId] = useState('')
+  const [catalogSelectedIdsByItem, setCatalogSelectedIdsByItem] = useState({})
   const costFileInputRef = useRef(null)
   const salesFileInputRef = useRef(null)
   const salesRef = useRef([])
@@ -941,15 +943,75 @@ export default function QuotePage() {
   })
   const removeSaleItem = (itemId) => updateSelectedSale((sale) => ({
     ...sale,
-    items: sale.items.length === 1 ? sale.items : sale.items.filter((item) => item.id !== itemId),
+    // Keep one empty editor row when the final item is removed, so users can
+    // immediately search and add another product without recreating the form.
+    items: sale.items.length === 1
+      ? [createSaleItem(itemId)]
+      : sale.items.filter((item) => item.id !== itemId),
   }))
+
+  const clearCatalogSelection = (itemId) => setCatalogSelectedIdsByItem((current) => {
+    if (!Object.hasOwn(current, itemId)) return current
+    const { [itemId]: ignored, ...remaining } = current
+    return remaining
+  })
+
+  const closeCatalogSearch = (itemId) => {
+    setCatalogSearchOpenItemId((current) => current === itemId ? '' : current)
+    clearCatalogSelection(itemId)
+  }
+
+  const updateCatalogSearchQuery = (itemId, value) => {
+    updateSaleItem(itemId, 'name', value)
+    clearCatalogSelection(itemId)
+  }
+
+  const toggleCatalogSelection = (itemId, catalogItemId) => {
+    const catalogId = String(catalogItemId)
+    setCatalogSelectedIdsByItem((current) => {
+      const selectedIds = current[itemId] || []
+      const nextIds = selectedIds.includes(catalogId)
+        ? selectedIds.filter((id) => id !== catalogId)
+        : [...selectedIds, catalogId]
+      if (!nextIds.length) {
+        const { [itemId]: ignored, ...remaining } = current
+        return remaining
+      }
+      return { ...current, [itemId]: nextIds }
+    })
+  }
 
   const selectCatalogItem = (itemId, catalogItem) => {
     updateSelectedSale((sale) => ({
       ...sale,
       items: sale.items.map((item) => item.id === itemId ? applyCatalogItemToSaleItem(item, catalogItem) : item),
     }))
-    setCatalogSearchOpenItemId('')
+    closeCatalogSearch(itemId)
+  }
+
+  const selectCatalogItems = (itemId, catalogItems) => {
+    if (!catalogItems.length) return
+    updateSelectedSale((sale) => {
+      const currentItem = sale.items.find((item) => item.id === itemId)
+      if (!currentItem) return sale
+      let additionalItemId = nextItemId(sale.items)
+      const appliedItems = applyCatalogItemsToSaleItems(
+        currentItem,
+        catalogItems,
+        () => createSaleItem(additionalItemId++, { qty: 1 }),
+      )
+      const currentIndex = sale.items.findIndex((item) => item.id === itemId)
+      return {
+        ...sale,
+        items: [
+          ...sale.items.slice(0, currentIndex),
+          appliedItems.currentItem,
+          ...appliedItems.additionalItems,
+          ...sale.items.slice(currentIndex + 1),
+        ],
+      }
+    })
+    closeCatalogSearch(itemId)
   }
 
   const updateShipment = (shipmentId, field, value) => updateSelectedSale((sale) => ({
@@ -1709,35 +1771,54 @@ export default function QuotePage() {
                         const productQuery = item.name ?? ''
                         const catalogSuggestionsId = `catalog-suggestions-${item.id}`
                         const isCatalogSearchOpen = catalogSearchOpenItemId === item.id && Boolean(productQuery.trim())
-                        const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 8) : []
+                        const productCandidates = isCatalogSearchOpen ? searchCostCatalog(costCatalog, productQuery, 30) : []
+                        const selectedCatalogIds = catalogSelectedIdsByItem[item.id] || []
+                        const selectedCatalogItems = selectedCatalogIds
+                          .map((catalogId) => productCandidates.find((catalogItem) => String(catalogItem.id) === catalogId))
+                          .filter(Boolean)
                         return (
                           <tr key={item.id}>
                             <td><input value={item.productCode ?? ''} onChange={(event) => updateSaleItem(item.id, 'productCode', event.target.value)} placeholder="품목코드" aria-label={`품목 ${index + 1} 품목코드`} /></td>
                             <td className="sales-margin-name-cell">
-                              {salesEditMode && <div className="sales-margin-product-toolbar"><span>품목 {index + 1}</span><button type="button" className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} disabled={selectedSale.items.length === 1}>삭제</button></div>}
+                              {salesEditMode && <div className="sales-margin-product-toolbar"><span>품목 {index + 1}</span><button type="button" className="btn-light btn-del" onClick={() => removeSaleItem(item.id)} title="이 품목 행 삭제">품목 삭제</button></div>}
                               <div className="catalog-search-field sales-margin-product-search" onBlur={(event) => {
-                                if (!event.currentTarget.contains(event.relatedTarget)) setCatalogSearchOpenItemId((current) => current === item.id ? '' : current)
+                                if (!event.currentTarget.contains(event.relatedTarget)) closeCatalogSearch(item.id)
                               }}>
                                 <div className="catalog-search-box">
                                   <input
                                     value={productQuery}
                                     onFocus={() => setCatalogSearchOpenItemId(item.id)}
-                                    onKeyDown={(event) => { if (event.key === 'Escape') setCatalogSearchOpenItemId('') }}
-                                    onChange={(event) => updateSaleItem(item.id, 'name', event.target.value)}
-                                    placeholder="품명 검색 또는 직접 입력"
+                                    onKeyDown={(event) => { if (event.key === 'Escape') closeCatalogSearch(item.id) }}
+                                    onChange={(event) => updateCatalogSearchQuery(item.id, event.target.value)}
+                                    placeholder="품명 검색 · 옵션 복수 선택"
                                     autoComplete="off"
                                     aria-label={`품목 ${index + 1} 품명`}
                                     aria-autocomplete="list"
                                     aria-controls={catalogSuggestionsId}
                                     aria-expanded={Boolean(isCatalogSearchOpen)}
                                   />
-                                  {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="listbox">
-                                    {productCandidates.length ? productCandidates.map((catalogItem) => (
-                                      <button type="button" className="catalog-suggestion" role="option" aria-label={`${catalogItem.name || '품목명 미입력'} 선택`} key={catalogItem.id} onMouseDown={(event) => event.preventDefault()} onClick={() => selectCatalogItem(item.id, catalogItem)}>
-                                        <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
-                                        <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
-                                      </button>
-                                    )) : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
+                                  {isCatalogSearchOpen && <div className="catalog-suggestions" id={catalogSuggestionsId} role="group" aria-label={`품목 ${index + 1} 검색 후보`}>
+                                    {productCandidates.length ? <>
+                                      <div className="catalog-selection-heading"><span>옵션을 여러 개 선택한 뒤 한 번에 추가하세요.</span><strong aria-live="polite">{selectedCatalogItems.length}개 선택</strong></div>
+                                      <div className="catalog-suggestion-list">
+                                        {productCandidates.map((catalogItem) => {
+                                          const isSelected = selectedCatalogIds.includes(String(catalogItem.id))
+                                          return <div className={`catalog-suggestion${isSelected ? ' is-selected' : ''}`} key={catalogItem.id}>
+                                            <label className="catalog-suggestion-check" title={`${catalogItem.name || '품목명 미입력'} 선택`}>
+                                              <input type="checkbox" checked={isSelected} onChange={() => toggleCatalogSelection(item.id, catalogItem.id)} aria-label={`${catalogItem.name || '품목명 미입력'}${catalogItem.spec ? ` ${catalogItem.spec}` : ''} 선택`} />
+                                            </label>
+                                            <button type="button" className="catalog-suggestion-select" aria-label={`${catalogItem.name || '품목명 미입력'} 바로 적용`} onClick={() => selectCatalogItem(item.id, catalogItem)}>
+                                              <span className="catalog-suggestion-main"><strong>{catalogItem.name || '품목명 미입력'}</strong><small>{catalogItem.productCode || '코드 없음'}{catalogItem.spec ? ` · ${catalogItem.spec}` : ''}{catalogItem.category ? ` · ${catalogItem.category}` : ''}</small></span>
+                                              <span className="catalog-suggestion-cost">{money(catalogItem.cost)}</span>
+                                            </button>
+                                          </div>
+                                        })}
+                                      </div>
+                                      <div className="catalog-selection-footer">
+                                        <span>첫 품목은 현재 행에, 나머지는 새 행에 추가됩니다.</span>
+                                        <button type="button" className="btn" disabled={!selectedCatalogItems.length} onClick={() => selectCatalogItems(item.id, selectedCatalogItems)}>선택한 옵션 {selectedCatalogItems.length}개 추가</button>
+                                      </div>
+                                    </> : <p className="catalog-no-result">{costCatalog.length ? '일치하는 원가표 품목이 없습니다.' : '원가관리 탭에서 원가 파일을 먼저 가져와 주세요.'}</p>}
                                   </div>}
                                 </div>
                               </div>
