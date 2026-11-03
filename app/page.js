@@ -15,6 +15,7 @@ import {
   quoteYearsForSales,
   salesForQuotePeriod,
 } from '../lib/sales-monthly-summary.mjs'
+import { withTrackingSaleStatus } from '../lib/sales-tracking-status.mjs'
 import { saleImportSignature, salesFromHistoryWorksheetRows } from '../lib/sales-history-import.mjs'
 import {
   applyCatalogItemToSaleItem,
@@ -1039,7 +1040,7 @@ export default function QuotePage() {
     const isShipment = type === 'shipment'
     const field = isShipment ? 'shipments' : 'payments'
     const createRow = isShipment ? createShipment : createPayment
-    updateSaleFromList(saleId, (sale) => ({
+    updateSaleFromList(saleId, (sale) => withTrackingSaleStatus({
       ...sale,
       [field]: normalizedTrackingRows(sale[field], createRow).map((row) => {
         if (String(row.id) !== String(trackingId)) return row
@@ -1174,37 +1175,57 @@ export default function QuotePage() {
     closeCatalogSearch(itemId)
   }
 
-  const updateShipment = (shipmentId, field, value) => updateSelectedSale((sale) => ({
-    ...sale,
-    shipments: normalizedTrackingRows(sale.shipments, createShipment).map((shipment) => (
-      shipment.id === shipmentId ? { ...shipment, [field]: value } : shipment
-    )),
-  }))
+  const updateShipment = (shipmentId, field, value) => updateSelectedSale((sale) => {
+    const shipments = normalizedTrackingRows(sale.shipments, createShipment)
+    const trackingStatusChanged = field === 'status' && shipments.some((shipment) => (
+      shipment.id === shipmentId && shipment.status !== value
+    ))
+    const nextSale = {
+      ...sale,
+      shipments: shipments.map((shipment) => (
+        shipment.id === shipmentId ? { ...shipment, [field]: value } : shipment
+      )),
+    }
+    return trackingStatusChanged ? withTrackingSaleStatus(nextSale) : nextSale
+  })
   const addShipment = () => updateSelectedSale((sale) => {
     const shipments = normalizedTrackingRows(sale.shipments, createShipment)
-    return { ...sale, shipments: [...shipments, createShipment(nextItemId(shipments))] }
+    return withTrackingSaleStatus({ ...sale, shipments: [...shipments, createShipment(nextItemId(shipments))] })
   })
   const removeShipment = (shipmentId) => updateSelectedSale((sale) => {
     const shipments = normalizedTrackingRows(sale.shipments, createShipment)
-    return { ...sale, shipments: shipments.length === 1 ? shipments : shipments.filter((shipment) => shipment.id !== shipmentId) }
+    return withTrackingSaleStatus({
+      ...sale,
+      shipments: shipments.length === 1 ? shipments : shipments.filter((shipment) => shipment.id !== shipmentId),
+    })
   })
 
   const updatePayment = (paymentId, field, value) => {
     if (field === 'amount' && !nonNegativeInput(value)) return
-    updateSelectedSale((sale) => ({
-      ...sale,
-      payments: normalizedTrackingRows(sale.payments, createPayment).map((payment) => (
-        payment.id === paymentId ? { ...payment, [field]: value } : payment
-      )),
-    }))
+    updateSelectedSale((sale) => {
+      const payments = normalizedTrackingRows(sale.payments, createPayment)
+      const trackingStatusChanged = field === 'status' && payments.some((payment) => (
+        payment.id === paymentId && payment.status !== value
+      ))
+      const nextSale = {
+        ...sale,
+        payments: payments.map((payment) => (
+          payment.id === paymentId ? { ...payment, [field]: value } : payment
+        )),
+      }
+      return trackingStatusChanged ? withTrackingSaleStatus(nextSale) : nextSale
+    })
   }
   const addPayment = () => updateSelectedSale((sale) => {
     const payments = normalizedTrackingRows(sale.payments, createPayment)
-    return { ...sale, payments: [...payments, createPayment(nextItemId(payments))] }
+    return withTrackingSaleStatus({ ...sale, payments: [...payments, createPayment(nextItemId(payments))] })
   })
   const removePayment = (paymentId) => updateSelectedSale((sale) => {
     const payments = normalizedTrackingRows(sale.payments, createPayment)
-    return { ...sale, payments: payments.length === 1 ? payments : payments.filter((payment) => payment.id !== paymentId) }
+    return withTrackingSaleStatus({
+      ...sale,
+      payments: payments.length === 1 ? payments : payments.filter((payment) => payment.id !== paymentId),
+    })
   })
 
   const openCostFilePicker = () => costFileInputRef.current?.click()
