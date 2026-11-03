@@ -502,8 +502,6 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.status-draft { color: #5c665e; background: #edf0ed; }
-.status-confirmed { color: #766016; background: #fff4d7; }
 .status-pending { color: #7a5c15; background: #fff4d7; }
 .status-in-progress { color: #176287; background: #e8f5fb; }
 .status-completed { color: #17613d; background: #eaf6ed; }
@@ -566,13 +564,14 @@ body {
 }
 .sales-status-picker { position: relative; flex: 0 0 118px; width: 118px; }
 .sales-status-trigger {
-  position: relative;
-  display: grid;
+  display: flex;
   width: 100%;
   min-height: 39px;
   height: 39px;
-  padding: 8px 30px 8px 10px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
   color: var(--green-dark);
   border: 1px solid #bed3c4;
   border-radius: 7px;
@@ -590,17 +589,14 @@ body {
   box-shadow: 0 0 0 3px rgba(36, 107, 69, 0.1);
 }
 .sales-status-caret {
-  position: absolute;
-  right: 10px;
-  top: 50%;
   display: block;
+  flex: 0 0 10px;
   width: 12px;
   height: 8px;
   color: var(--green-dark);
-  transform: translateY(-50%);
   transition: transform 0.15s ease;
 }
-.sales-status-trigger[aria-expanded="true"] .sales-status-caret { transform: translateY(-50%) rotate(180deg); }
+.sales-status-trigger[aria-expanded="true"] .sales-status-caret { transform: rotate(180deg); }
 .sales-status-menu {
   position: absolute;
   top: calc(100% + 4px);

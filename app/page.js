@@ -176,6 +176,11 @@ const trackingStatusItems = (rows, type) => {
   return items
 }
 
+const normalizeSaleStatus = (status) => {
+  if (status === 'inProgress' || status === 'completed') return status
+  return 'pending'
+}
+
 const normalizeSaleRecord = (sale = {}) => {
   const record = sale || {}
   const createdDate = String(record.createdAt ?? '').slice(0, 10)
@@ -190,9 +195,7 @@ const normalizeSaleRecord = (sale = {}) => {
     taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
     quoteDate,
     requestedDueDate: String(record.requestedDueDate ?? ''),
-    status: ['draft', 'confirmed', 'pending', 'inProgress', 'completed'].includes(record.status)
-      ? record.status
-      : record.status === 'issued' ? 'confirmed' : 'draft',
+    status: normalizeSaleStatus(record.status),
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
     : [createSaleItem(1)],
@@ -221,8 +224,6 @@ const DEFAULT_SUPPLIER = {
 }
 
 const SALE_STATUS = {
-  draft: { label: '작성중', className: 'status-draft' },
-  confirmed: { label: '견적 확정', className: 'status-confirmed' },
   pending: { label: '진행 전', className: 'status-pending' },
   inProgress: { label: '진행 중', className: 'status-in-progress' },
   completed: { label: '완료', className: 'status-completed' },
@@ -308,7 +309,7 @@ const SalesStatusPicker = ({ value, onChange }) => {
     }
   }
 
-  const activeStatus = SALE_STATUS[value] || SALE_STATUS.draft
+  const activeStatus = SALE_STATUS[value] || SALE_STATUS.pending
 
   return (
     <div className="sales-status-picker" ref={pickerRef}>
@@ -393,7 +394,7 @@ const createSale = () => {
     businessRegistrationNumber: '',
     taxInvoiceEmail: '',
     recipientTitle: '대표이사 귀하',
-    status: 'draft',
+    status: 'pending',
     requestedDueDate: '',
     includeShipping: false,
     shippingFee: '',
@@ -1592,7 +1593,7 @@ export default function QuotePage() {
                           const profit = saleTotals.totalProfit
                           const profitRate = saleTotals.totalProfitRate
                           const firstItem = quoteItems[0]?.name || '품목 미입력'
-                          const saleStatus = SALE_STATUS[sale.status] ? sale.status : 'draft'
+                          const saleStatus = SALE_STATUS[sale.status] ? sale.status : 'pending'
                           const status = SALE_STATUS[saleStatus]
                           const shipmentStatuses = trackingStatusItems(sale.shipments, 'shipment')
                           const paymentStatuses = trackingStatusItems(sale.payments, 'payment')
@@ -1990,7 +1991,7 @@ export default function QuotePage() {
         <main className="page">
           {linkedSale && (
             <div className="linked-sale-banner no-print">
-              <div><span>연결된 영업건</span><strong>{linkedSale.clientName || '거래처 미입력'}</strong><small>{SALE_STATUS[linkedSale.status]?.label || '작성중'} · 견적서에서 수정한 거래처와 품목은 영업관리 정보에 자동 반영되지 않습니다.</small></div>
+              <div><span>연결된 영업건</span><strong>{linkedSale.clientName || '거래처 미입력'}</strong><small>{SALE_STATUS[linkedSale.status]?.label || '진행 전'} · 견적서에서 수정한 거래처와 품목은 영업관리 정보에 자동 반영되지 않습니다.</small></div>
               <button className="btn-light" onClick={() => openSale(linkedSale.id)}>영업건 열기</button>
             </div>
           )}
