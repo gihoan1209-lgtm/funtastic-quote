@@ -406,6 +406,8 @@ body {
 .sales-search { flex: 1 1 240px; min-width: 180px; }
 .sales-controls select { min-width: 120px; }
 .sales-count { margin-left: 0; color: var(--text3); font-size: 13px; white-space: nowrap; }
+.sales-detail-toggle { min-height: 38px; white-space: nowrap; }
+.sales-detail-toggle.is-active { color: var(--green-dark); border-color: #a7c6ae; background: var(--green-soft); font-weight: 700; }
 .sales-filter-reset { min-height: 38px; white-space: nowrap; }
 .sales-import-message { color: var(--green-dark); font-size: 12px; font-weight: 700; line-height: 1.45; }
 .sales-monthly-summary {

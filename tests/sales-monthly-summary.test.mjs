@@ -6,6 +6,7 @@ import {
   quoteDateForList,
   quoteMonthForList,
   quoteYearsForSales,
+  salesForQuotePeriod,
 } from '../lib/sales-monthly-summary.mjs'
 
 const sale = (quoteDate, price, qty = 1) => ({
@@ -46,4 +47,15 @@ test('available quote years include records and the supplied current year', () =
   ], '2026')
 
   assert.deepEqual(years, ['2027', '2026', '2025'])
+})
+
+test('quote period list limits records to the selected year and optional month', () => {
+  const january = sale('2026-01-02', 100)
+  const october = sale('2026-10-20', 200)
+  const priorYear = sale('2025-10-20', 300)
+  const legacyDate = { ...sale('', 400), saleDate: '2026-10-30' }
+
+  assert.deepEqual(salesForQuotePeriod([january, october, priorYear, legacyDate], '2026', '10'), [october, legacyDate])
+  assert.deepEqual(salesForQuotePeriod([january, october, priorYear], '2026'), [january, october])
+  assert.deepEqual(salesForQuotePeriod([january], '2026', '13'), [])
 })

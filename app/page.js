@@ -13,6 +13,7 @@ import {
   calculateMonthlyQuoteSales,
   quoteDateForList,
   quoteYearsForSales,
+  salesForQuotePeriod,
 } from '../lib/sales-monthly-summary.mjs'
 import { saleImportSignature, salesFromHistoryWorksheetRows } from '../lib/sales-history-import.mjs'
 import {
@@ -457,7 +458,8 @@ export default function QuotePage() {
   const [salesSearch, setSalesSearch] = useState('')
   const [salesStatusFilter, setSalesStatusFilter] = useState('all')
   const [salesQuoteYear, setSalesQuoteYear] = useState(() => today().slice(0, 4))
-  const [salesQuoteMonth, setSalesQuoteMonth] = useState('')
+  const [salesQuoteMonth, setSalesQuoteMonth] = useState(() => today().slice(5, 7))
+  const [salesDetailedSearchOpen, setSalesDetailedSearchOpen] = useState(false)
   const [salesImportMessage, setSalesImportMessage] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
   const [salesSaveState, setSalesSaveState] = useState('idle')
@@ -524,10 +526,8 @@ export default function QuotePage() {
   }, [sales, salesSearch, salesStatusFilter])
 
   const filteredSales = useMemo(() => {
-    return salesMatchingSearchAndStatus.filter((sale) => {
-      if (!salesQuoteMonth) return true
-      return quoteDateForList(sale).startsWith(`${salesQuoteYear}-${salesQuoteMonth}`)
-    }).sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
+    return salesForQuotePeriod(salesMatchingSearchAndStatus, salesQuoteYear, salesQuoteMonth)
+      .sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
   }, [salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear])
 
   const salesQuoteYears = useMemo(
@@ -549,8 +549,15 @@ export default function QuotePage() {
   )
   const allFilteredSalesSelected = filteredSales.length > 0 && filteredSales.every((sale) => selectedSaleIds.includes(sale.id))
   const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
+  const currentSalesQuoteYear = today().slice(0, 4)
+  const currentSalesQuoteMonth = today().slice(5, 7)
+  const salesPeriodLabel = salesQuoteMonth
+    ? `${salesQuoteYear}년 ${Number(salesQuoteMonth)}월`
+    : `${salesQuoteYear}년 전체`
   const hasSalesFilters = Boolean(
-    salesSearch.trim() || salesStatusFilter !== 'all' || salesQuoteMonth,
+    salesSearch.trim()
+      || salesStatusFilter !== 'all'
+      || (salesDetailedSearchOpen && (salesQuoteYear !== currentSalesQuoteYear || salesQuoteMonth !== currentSalesQuoteMonth)),
   )
 
   useEffect(() => {
@@ -585,7 +592,18 @@ export default function QuotePage() {
     setSalesSearch('')
     setSalesStatusFilter('all')
     setSalesQuoteYear(today().slice(0, 4))
-    setSalesQuoteMonth('')
+    setSalesQuoteMonth(today().slice(5, 7))
+  }
+
+  const toggleSalesDetailedSearch = () => {
+    if (salesDetailedSearchOpen) {
+      setSalesDetailedSearchOpen(false)
+      setSalesQuoteYear(today().slice(0, 4))
+      setSalesQuoteMonth(today().slice(5, 7))
+      return
+    }
+
+    setSalesDetailedSearchOpen(true)
   }
 
   const writeAppHistory = useCallback((navigation, mode = 'push') => {
@@ -1521,12 +1539,21 @@ export default function QuotePage() {
                     <option value="all">전체 상태</option>
                     {Object.entries(SALE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
                   </select>
+                  <button
+                    type="button"
+                    className={`btn-light sales-detail-toggle${salesDetailedSearchOpen ? ' is-active' : ''}`}
+                    onClick={toggleSalesDetailedSearch}
+                    aria-expanded={salesDetailedSearchOpen}
+                    aria-controls="sales-monthly-summary"
+                  >
+                    {salesDetailedSearchOpen ? '상세 검색 닫기' : '상세 검색'}
+                  </button>
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
-                  <span className="sales-count">{filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
+                  <span className="sales-count">{salesPeriodLabel} · {filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
                   {salesImportMessage && <span className="sales-import-message" role="status">{salesImportMessage}</span>}
                   {salesSaveState !== 'idle' && <span className={`sales-save-status sales-list-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
                 </div>
-                <section className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
+                {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
                   <div className="sales-monthly-summary-head">
                     <div className="sales-monthly-title">
                       <label className="sales-monthly-year-picker"><span>연도</span><select value={salesQuoteYear} onChange={(event) => { setSalesQuoteYear(event.target.value); setSalesQuoteMonth('') }}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
@@ -1534,7 +1561,7 @@ export default function QuotePage() {
                     </div>
                     <div className="sales-monthly-actions">
                       <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
-                      {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => setSalesQuoteMonth('')}>전체 목록</button>}
+                      {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => setSalesQuoteMonth('')}>선택 연도 전체</button>}
                     </div>
                   </div>
                   <div className="sales-monthly-summary-grid">
@@ -1552,6 +1579,7 @@ export default function QuotePage() {
                     ))}
                   </div>
                 </section>
+                }
 
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
