@@ -1245,7 +1245,6 @@ export default function QuotePage() {
     setActiveTab('sales')
     writeAppHistory({ tab: 'sales', salesView: 'edit', selectedSaleId: sale.id })
   }
-  const copySelectedSale = () => openCopiedSale(selectedSale)
   const copySelectedSaleFromList = () => {
     if (selectedSales.length !== 1) return
     const [sourceSale] = selectedSales
@@ -1272,11 +1271,6 @@ export default function QuotePage() {
 
   const saveSale = () => {
     const saved = persistSales(sales)
-    setSalesSaveState(saved ? 'saved' : 'error')
-  }
-
-  const finishSaleEditing = () => {
-    const saved = salesSaveState === 'dirty' ? persistSales(sales) : true
     setSalesSaveState(saved ? 'saved' : 'error')
     if (!saved) return
     setCatalogSearchOpenItemId('')
@@ -1652,12 +1646,10 @@ export default function QuotePage() {
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
                   <SalesStatusPicker value={selectedSale.status} onChange={updateSaleStatus} />
-                  <button className="btn-light" onClick={copySelectedSale} title="거래처와 품목을 복사해 새 영업건을 만듭니다">영업건 복사</button>
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>
                       <button className="btn-light" onClick={saveSale}>저장</button>
-                      <button className="btn-light" onClick={finishSaleEditing}>편집 완료</button>
                     </>
                   ) : <button className="btn-light" onClick={() => { setSalesEditMode(true); setSalesSaveState('idle') }}>편집</button>}
                   {salesSaveState !== 'idle' && <span className={`sales-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
