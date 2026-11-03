@@ -2099,6 +2099,7 @@ export default function QuotePage() {
                 <button className="back-button" onClick={leaveSalesEditor}>← 목록</button>
                 <div className="sales-detail-actions">
                   <SalesStatusPicker value={selectedSale.status} onChange={updateSaleStatus} />
+                  <button type="button" className="btn-light sales-sabangnet-action" onClick={() => void generateSabangnetAttachment(selectedSale.id, { replaceExisting: true })}>{selectedSaleHasSabangnetAttachment ? '사방넷 엑셀 다시 생성' : '사방넷 엑셀 생성'}</button>
                   {salesEditMode ? (
                     <>
                       <button className="btn-light btn-del" onClick={deleteSelectedSale}>삭제</button>

@@ -665,6 +665,7 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   justify-content: center;
   white-space: nowrap;
 }
+.sales-detail-actions > .sales-sabangnet-action { width: auto; min-width: 132px; }
 .sales-status-picker { position: relative; flex: 0 0 118px; width: 118px; }
 .sales-status-trigger {
   display: flex;
