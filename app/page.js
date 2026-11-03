@@ -177,7 +177,7 @@ const trackingStatusItems = (rows, type) => {
 }
 
 const normalizeSaleStatus = (status) => {
-  if (status === 'inProgress' || status === 'completed') return status
+  if (status === 'inProgress' || status === 'blocked' || status === 'completed') return status
   return 'pending'
 }
 
@@ -226,6 +226,7 @@ const DEFAULT_SUPPLIER = {
 const SALE_STATUS = {
   pending: { label: '진행 전', className: 'status-pending' },
   inProgress: { label: '진행 중', className: 'status-in-progress' },
+  blocked: { label: '진행 불가', className: 'status-blocked' },
   completed: { label: '완료', className: 'status-completed' },
 }
 
@@ -463,6 +464,7 @@ export default function QuotePage() {
   const [salesDetailedSearchOpen, setSalesDetailedSearchOpen] = useState(false)
   const [salesImportMessage, setSalesImportMessage] = useState('')
   const [selectedSaleIds, setSelectedSaleIds] = useState([])
+  const [salesDownloadScope, setSalesDownloadScope] = useState('all')
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
   const [clientInfoCopyState, setClientInfoCopyState] = useState('idle')
@@ -547,6 +549,14 @@ export default function QuotePage() {
   const selectedSales = useMemo(
     () => sales.filter((sale) => selectedSaleIds.includes(sale.id)),
     [sales, selectedSaleIds],
+  )
+  const inProgressSaleCount = useMemo(
+    () => sales.filter((sale) => sale.status === 'inProgress').length,
+    [sales],
+  )
+  const blockedSaleCount = useMemo(
+    () => sales.filter((sale) => sale.status === 'blocked').length,
+    [sales],
   )
   const allFilteredSalesSelected = filteredSales.length > 0 && filteredSales.every((sale) => selectedSaleIds.includes(sale.id))
   const someFilteredSalesSelected = filteredSales.some((sale) => selectedSaleIds.includes(sale.id))
@@ -1518,16 +1528,20 @@ export default function QuotePage() {
                   <p>거래처와 품목을 관리하고, 확정된 내용을 견적서로 바로 보냅니다.</p>
                 </div>
                 <div className="sales-heading-actions">
-                  <button className="btn-light sales-heading-action" onClick={openSalesFilePicker}>엑셀 영업건 가져오기</button>
                   <button className="btn-light sales-heading-action" onClick={copySelectedSaleFromList} disabled={selectedSales.length !== 1} title="영업건 1건을 선택하면 거래처와 품목을 복사해 새 영업건을 만듭니다">선택 영업건 복사</button>
-                  <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('selected')} disabled={!selectedSales.length}>선택 엑셀 다운로드 ({selectedSales.length})</button>
-                  <button className="btn-light sales-heading-action" onClick={() => downloadSalesList('all')} disabled={!sales.length}>전체 엑셀 다운로드</button>
                   <button className="btn-light btn-del sales-heading-action" onClick={deleteSelectedSalesFromList} disabled={!selectedSales.length}>선택 삭제 ({selectedSales.length})</button>
                   <button className="button-primary sales-heading-action" onClick={openNewSale}>+ 새 영업건</button>
                 </div>
               </section>
 
               <section className="sales-list-card">
+                <div className="sales-list-summary">
+                  <div className="sales-list-period"><strong>{salesPeriodLabel} 영업건</strong><span>{filteredSales.length}건</span></div>
+                  <div className="sales-workflow-summary" aria-label="전체 영업 진행 상태">
+                    <span className="status-badge status-in-progress">전체 진행 중 {inProgressSaleCount}건</span>
+                    <span className="status-badge status-blocked">진행 불가 {blockedSaleCount}건</span>
+                  </div>
+                </div>
                 <div className="sales-controls">
                   <input className="sales-search" value={salesSearch} onChange={(event) => setSalesSearch(event.target.value)} placeholder="거래처 또는 품명 검색" aria-label="영업건 검색" />
                   <select value={salesStatusFilter} onChange={(event) => setSalesStatusFilter(event.target.value)} aria-label="영업 상태 필터">
@@ -1544,9 +1558,18 @@ export default function QuotePage() {
                     {salesDetailedSearchOpen ? '상세 검색 닫기' : '상세 검색'}
                   </button>
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
-                  <span className="sales-count">{salesPeriodLabel} · {filteredSales.length}건{selectedSales.length ? ` · ${selectedSales.length}건 선택` : ''}</span>
-                  {salesImportMessage && <span className="sales-import-message" role="status">{salesImportMessage}</span>}
-                  {salesSaveState !== 'idle' && <span className={`sales-save-status sales-list-save-status ${SALES_SAVE_STATUS[salesSaveState].className}`} role="status">{SALES_SAVE_STATUS[salesSaveState].label}</span>}
+                  <div className="sales-download-control" role="group" aria-label="엑셀 다운로드">
+                    <select value={salesDownloadScope} onChange={(event) => setSalesDownloadScope(event.target.value)} aria-label="엑셀 다운로드 범위">
+                      <option value="selected">선택 {selectedSales.length}건</option>
+                      <option value="all">전체 {sales.length}건</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-light"
+                      disabled={salesDownloadScope === 'selected' ? !selectedSales.length : !sales.length}
+                      onClick={() => downloadSalesList(salesDownloadScope)}
+                    >엑셀 다운로드</button>
+                  </div>
                 </div>
                 {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
                   <div className="sales-monthly-summary-head">
