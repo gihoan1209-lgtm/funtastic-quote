@@ -16,6 +16,18 @@ import {
   salesForQuotePeriod,
 } from '../lib/sales-monthly-summary.mjs'
 import { withTrackingSaleStatus } from '../lib/sales-tracking-status.mjs'
+import {
+  createSabangnetWorkbook,
+  sabangnetOrderNumberForSale,
+  sabangnetRowsFromSale,
+  sabangnetValidationIssues,
+} from '../lib/sabangnet-export.mjs'
+import {
+  deleteSaleAttachment,
+  deleteSaleAttachmentsForSales,
+  getSaleAttachment,
+  saveSaleAttachment,
+} from '../lib/sale-attachments.mjs'
 import { saleImportSignature, salesFromHistoryWorksheetRows } from '../lib/sales-history-import.mjs'
 import {
   applyCatalogItemToSaleItem,
@@ -31,6 +43,7 @@ const SALES_STORAGE_KEY = 'funtastic-sales-history'
 const SALES_ACTIVE_VIEW_STORAGE_KEY = 'funtastic-sales-active-view'
 const COST_CATALOG_STORAGE_KEY = 'funtastic-cost-catalog'
 const COST_CATALOG_PAGE_SIZE = 100
+const MAX_SALE_ATTACHMENT_BYTES = 20 * 1024 * 1024
 const APP_HISTORY_STATE_KEY = '__funtasticQuoteNavigation'
 const APP_HISTORY_VERSION = 1
 const APP_TABS = ['sales', 'quote', 'costs']
@@ -80,12 +93,33 @@ const formatShortDate = (date) => {
   return `${Number(month)}.${Number(day)}`
 }
 
+const attachmentSizeLabel = (size) => {
+  const bytes = Number(size) || 0
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+const normalizedSaleAttachments = (attachments) => (
+  (Array.isArray(attachments) ? attachments : [])
+    .map((attachment) => ({
+      id: String(attachment?.id ?? ''),
+      name: String(attachment?.name ?? '첨부파일'),
+      type: String(attachment?.type ?? ''),
+      size: Math.max(0, Number(attachment?.size) || 0),
+      createdAt: String(attachment?.createdAt ?? ''),
+      kind: String(attachment?.kind ?? 'file'),
+    }))
+    .filter((attachment) => attachment.id)
+)
+
 const clientInfoClipboardText = (sale = {}) => [
   `거래처명: ${String(sale.clientName ?? '').trim()}`,
   `대표자: ${String(sale.representativeName ?? '').trim()}`,
   `사업자번호: ${String(sale.businessRegistrationNumber ?? '').trim()}`,
   `세금계산서 이메일: ${String(sale.taxInvoiceEmail ?? '').trim()}`,
   `연락처: ${String(sale.contactPhone ?? '').trim()}`,
+  `주소: ${String(sale.address ?? '').trim()}`,
 ].join('\n')
 
 const copyTextToClipboard = async (text) => {
@@ -194,9 +228,14 @@ const normalizeSaleRecord = (sale = {}) => {
     contactPhone: String(record.contactPhone ?? ''),
     businessRegistrationNumber: String(record.businessRegistrationNumber ?? ''),
     taxInvoiceEmail: String(record.taxInvoiceEmail ?? ''),
+    address: String(record.address ?? ''),
+    recipientName: String(record.recipientName ?? ''),
+    recipientPhone: String(record.recipientPhone ?? ''),
+    deliveryMessage: String(record.deliveryMessage ?? ''),
     quoteDate,
     requestedDueDate: String(record.requestedDueDate ?? ''),
     status: normalizeSaleStatus(record.status),
+    attachments: normalizedSaleAttachments(record.attachments),
     items: Array.isArray(record.items) && record.items.length
       ? record.items.map((item, index) => createSaleItem(item?.id ?? index + 1, item))
     : [createSaleItem(1)],
@@ -484,6 +523,10 @@ const createSale = () => {
     contactPhone: '',
     businessRegistrationNumber: '',
     taxInvoiceEmail: '',
+    address: '',
+    recipientName: '',
+    recipientPhone: '',
+    deliveryMessage: '',
     recipientTitle: '대표이사 귀하',
     status: 'pending',
     requestedDueDate: '',
@@ -492,6 +535,7 @@ const createSale = () => {
     shippingCost: 0,
     shippingVatIncluded: true,
     internalMemo: '',
+    attachments: [],
     quoteId: '',
     items: [createSaleItem(1)],
     shipments: [createShipment(1)],
@@ -510,6 +554,10 @@ const createCopiedSale = (source = {}) => {
     contactPhone: String(source.contactPhone ?? ''),
     businessRegistrationNumber: String(source.businessRegistrationNumber ?? ''),
     taxInvoiceEmail: String(source.taxInvoiceEmail ?? ''),
+    address: String(source.address ?? ''),
+    recipientName: String(source.recipientName ?? ''),
+    recipientPhone: String(source.recipientPhone ?? ''),
+    deliveryMessage: String(source.deliveryMessage ?? ''),
     recipientTitle: String(source.recipientTitle || sale.recipientTitle),
     items: sourceItems.map((item, index) => createSaleItem(index + 1, { ...item, id: index + 1 })),
   }
@@ -558,6 +606,7 @@ export default function QuotePage() {
   const [salesSaveState, setSalesSaveState] = useState('idle')
   const [salesEditMode, setSalesEditMode] = useState(false)
   const [clientInfoCopyState, setClientInfoCopyState] = useState('idle')
+  const [attachmentMessage, setAttachmentMessage] = useState(null)
   const [salesHydrated, setSalesHydrated] = useState(false)
   const [costCatalog, setCostCatalog] = useState([])
   const [costCatalogMeta, setCostCatalogMeta] = useState(null)
@@ -569,10 +618,15 @@ export default function QuotePage() {
   const [catalogSelectedIdsByItem, setCatalogSelectedIdsByItem] = useState({})
   const costFileInputRef = useRef(null)
   const salesFileInputRef = useRef(null)
+  const saleAttachmentInputRef = useRef(null)
   const salesRef = useRef([])
   const appViewRef = useRef(null)
   const selectAllSalesRef = useRef(null)
   const clientInfoCopyTimerRef = useRef(null)
+  const attachmentMessageTimerRef = useRef(null)
+  const salesStatusSnapshotRef = useRef(null)
+  const sabangnetGenerationRef = useRef(new Set())
+  const sabangnetAutoPendingRef = useRef(new Set())
 
   const [date, setDate] = useState(today())
   const [recipient, setRecipient] = useState('')
@@ -590,6 +644,9 @@ export default function QuotePage() {
 
   const selectedSale = sales.find((sale) => sale.id === selectedSaleId)
   const linkedSale = sales.find((sale) => sale.id === linkedSaleId)
+  const selectedSaleAttachments = normalizedSaleAttachments(selectedSale?.attachments)
+  const selectedSaleHasSabangnetAttachment = selectedSaleAttachments.some((attachment) => attachment.kind === 'sabangnet')
+  const selectedSaleSabangnetIssues = selectedSale ? sabangnetValidationIssues(selectedSale) : []
   const totals = useMemo(() => calculateQuoteTotals(items), [items])
   const selectedSaleTotals = selectedSale ? calculateSaleTotals(selectedSale) : null
   const selectedSaleShippingNet = selectedSaleTotals?.shippingGross != null && selectedSaleTotals?.shippingCost != null
@@ -610,7 +667,7 @@ export default function QuotePage() {
     return sales.filter((sale) => {
       const matchesStatus = salesStatusFilter === 'all' || sale.status === salesStatusFilter
       const itemSearchTerms = (sale.items || []).flatMap((item) => [item?.name, item?.productCode, item?.spec])
-      const matchesSearch = !query || [sale.clientName, sale.representativeName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, ...itemSearchTerms]
+      const matchesSearch = !query || [sale.clientName, sale.representativeName, sale.contactName, sale.contactPhone, sale.businessRegistrationNumber, sale.taxInvoiceEmail, sale.address, sale.recipientName, sale.recipientPhone, sale.deliveryMessage, ...itemSearchTerms]
         .join(' ')
         .toLocaleLowerCase('ko-KR')
         .includes(query)
@@ -855,6 +912,7 @@ export default function QuotePage() {
       setSales([])
     }
     salesRef.current = loadedSales
+    salesStatusSnapshotRef.current = new Map(loadedSales.map((sale) => [String(sale.id), sale.status]))
 
     let savedNavigation = null
     try {
@@ -963,6 +1021,7 @@ export default function QuotePage() {
 
   useEffect(() => () => {
     if (clientInfoCopyTimerRef.current) window.clearTimeout(clientInfoCopyTimerRef.current)
+    if (attachmentMessageTimerRef.current) window.clearTimeout(attachmentMessageTimerRef.current)
   }, [])
 
   const persistQuotes = (nextQuotes) => {
@@ -998,6 +1057,189 @@ export default function QuotePage() {
       return false
     }
   }
+
+  const showAttachmentMessage = (text, tone = 'success') => {
+    setAttachmentMessage({ text, tone })
+    if (attachmentMessageTimerRef.current) window.clearTimeout(attachmentMessageTimerRef.current)
+    attachmentMessageTimerRef.current = window.setTimeout(() => setAttachmentMessage(null), 5000)
+  }
+
+  const persistSaleAttachmentMetadata = (saleId, updateAttachments) => {
+    const targetId = String(saleId)
+    let found = false
+    const nextSales = salesRef.current.map((sale) => {
+      if (String(sale.id) !== targetId) return sale
+      found = true
+      return {
+        ...sale,
+        attachments: normalizedSaleAttachments(updateAttachments(normalizedSaleAttachments(sale.attachments))),
+        updatedAt: new Date().toISOString(),
+      }
+    })
+    if (!found) return false
+
+    const saved = persistSales(nextSales)
+    if (String(selectedSaleId) === targetId) setSalesSaveState(saved ? 'saved' : 'error')
+    return saved
+  }
+
+  const attachBlobToSale = async (saleId, metadata, blob, replaceAttachmentIds = []) => {
+    await saveSaleAttachment(saleId, metadata, blob)
+    const replaceIds = new Set(replaceAttachmentIds.map((id) => String(id)))
+    const saved = persistSaleAttachmentMetadata(saleId, (attachments) => [
+      ...attachments.filter((attachment) => !replaceIds.has(attachment.id)),
+      metadata,
+    ])
+    if (!saved) {
+      await deleteSaleAttachment(metadata.id).catch(() => {})
+      throw new Error('첨부파일 정보를 영업건에 저장하지 못했습니다.')
+    }
+    await Promise.allSettled([...replaceIds].map((attachmentId) => deleteSaleAttachment(attachmentId)))
+    return metadata
+  }
+
+  const handleSaleAttachmentUpload = async (event) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ''
+    if (!salesEditMode || !selectedSaleId || !files.length) return
+
+    const allowedFiles = files.filter((file) => file.size <= MAX_SALE_ATTACHMENT_BYTES)
+    const rejectedCount = files.length - allowedFiles.length
+    if (!allowedFiles.length) {
+      showAttachmentMessage('첨부파일은 파일당 20MB 이하만 저장할 수 있습니다.', 'error')
+      return
+    }
+
+    let attachedCount = 0
+    for (const file of allowedFiles) {
+      const metadata = {
+        id: makeId('attachment'),
+        name: file.name || '첨부파일',
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        createdAt: new Date().toISOString(),
+        kind: 'file',
+      }
+      try {
+        await attachBlobToSale(selectedSaleId, metadata, file)
+        attachedCount += 1
+      } catch {
+        showAttachmentMessage('첨부파일을 저장하지 못했습니다. 브라우저 저장 공간을 확인해 주세요.', 'error')
+        return
+      }
+    }
+
+    showAttachmentMessage(`${attachedCount}개 파일을 첨부했습니다.${rejectedCount ? ` ${rejectedCount}개는 20MB를 초과해 제외했습니다.` : ''}`)
+  }
+
+  const downloadSaleAttachment = async (attachment) => {
+    try {
+      const storedAttachment = await getSaleAttachment(attachment.id)
+      if (!storedAttachment?.blob) throw new Error('not-found')
+      const url = window.URL.createObjectURL(storedAttachment.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = attachment.name || '첨부파일'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
+    } catch {
+      showAttachmentMessage('첨부파일을 찾지 못했습니다. 다시 첨부해 주세요.', 'error')
+    }
+  }
+
+  const removeSaleAttachment = async (attachment) => {
+    if (!selectedSaleId) return
+    try {
+      const saved = persistSaleAttachmentMetadata(selectedSaleId, (attachments) => (
+        attachments.filter((current) => current.id !== attachment.id)
+      ))
+      if (!saved) throw new Error('save-failed')
+      await deleteSaleAttachment(attachment.id).catch(() => {})
+      showAttachmentMessage('첨부파일을 삭제했습니다.')
+    } catch {
+      showAttachmentMessage('첨부파일을 삭제하지 못했습니다.', 'error')
+    }
+  }
+
+  const generateSabangnetAttachment = async (saleId, { automatic = false, replaceExisting = false } = {}) => {
+    const sale = salesRef.current.find((current) => String(current.id) === String(saleId))
+    if (!sale) return false
+    const generationKey = String(sale.id)
+    if (sabangnetGenerationRef.current.has(generationKey)) {
+      if (!automatic && String(selectedSaleId) === generationKey) showAttachmentMessage('사방넷 엑셀을 생성하고 있습니다.')
+      return false
+    }
+
+    const existingGeneratedFiles = normalizedSaleAttachments(sale.attachments).filter((attachment) => attachment.kind === 'sabangnet')
+    if (existingGeneratedFiles.length && !replaceExisting) {
+      sabangnetAutoPendingRef.current.delete(generationKey)
+      return true
+    }
+
+    const issues = sabangnetValidationIssues(sale)
+    if (issues.length) {
+      if (!automatic) showAttachmentMessage(`사방넷 엑셀을 만들려면 ${issues.join(', ')}을(를) 입력해 주세요.`, 'error')
+      return false
+    }
+
+    sabangnetGenerationRef.current.add(generationKey)
+    try {
+      const orderNumber = sabangnetOrderNumberForSale(sale)
+      const safeOrderNumber = orderNumber.replace(/[\\/:*?"<>|]/g, '_')
+      const workbook = createSabangnetWorkbook(sabangnetRowsFromSale(sale))
+      const blob = new Blob([workbook], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const metadata = {
+        id: makeId('attachment'),
+        name: `사방넷_등록양식_${safeOrderNumber}.xlsx`,
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: blob.size,
+        createdAt: new Date().toISOString(),
+        kind: 'sabangnet',
+      }
+      await attachBlobToSale(sale.id, metadata, blob, replaceExisting ? existingGeneratedFiles.map((attachment) => attachment.id) : [])
+      sabangnetAutoPendingRef.current.delete(generationKey)
+      if (String(selectedSaleId) === String(sale.id)) {
+        showAttachmentMessage(automatic ? '진행 중 상태로 변경되어 사방넷 등록 양식을 자동 첨부했습니다.' : '사방넷 등록 양식을 첨부했습니다.')
+      }
+      return true
+    } catch {
+      if (String(selectedSaleId) === String(sale.id)) showAttachmentMessage('사방넷 엑셀을 생성하지 못했습니다.', 'error')
+      return false
+    } finally {
+      sabangnetGenerationRef.current.delete(generationKey)
+    }
+  }
+
+  useEffect(() => {
+    if (!salesHydrated) return
+    const previousStatuses = salesStatusSnapshotRef.current
+    const currentStatuses = new Map(sales.map((sale) => [String(sale.id), sale.status]))
+    if (!previousStatuses) {
+      salesStatusSnapshotRef.current = currentStatuses
+      return
+    }
+
+    sales.forEach((sale) => {
+      const saleId = String(sale.id)
+      if (sale.status !== 'inProgress') {
+        sabangnetAutoPendingRef.current.delete(saleId)
+        return
+      }
+      if (previousStatuses.get(saleId) !== 'inProgress') sabangnetAutoPendingRef.current.add(saleId)
+    })
+    salesStatusSnapshotRef.current = currentStatuses
+
+    sales.forEach((sale) => {
+      const saleId = String(sale.id)
+      const hasSabangnetAttachment = normalizedSaleAttachments(sale.attachments).some((attachment) => attachment.kind === 'sabangnet')
+      if (!sabangnetAutoPendingRef.current.has(saleId) || hasSabangnetAttachment || sabangnetValidationIssues(sale).length) return
+      void generateSabangnetAttachment(sale.id, { automatic: true })
+    })
+  }, [sales, salesHydrated])
 
   const updateSelectedSale = (updater) => {
     if (!selectedSaleId) return
@@ -1490,8 +1732,15 @@ export default function QuotePage() {
     if (!selectedIds.size) return
     const count = selectedIds.size
     if (!window.confirm(`선택한 영업건 ${count}건을 삭제할까요?\n\n연결된 견적서는 유지됩니다.`)) return
-    persistSales(sales.filter((sale) => !selectedIds.has(sale.id)))
+    const saved = persistSales(sales.filter((sale) => !selectedIds.has(sale.id)))
+    if (!saved) {
+      setSalesSaveState('error')
+      return
+    }
     persistQuotes(savedQuotes.map((quote) => selectedIds.has(quote.salesId) ? { ...quote, salesId: null } : quote))
+    void deleteSaleAttachmentsForSales([...selectedIds]).catch(() => {
+      showAttachmentMessage('삭제한 영업건의 첨부파일을 정리하지 못했습니다.', 'error')
+    })
     setSelectedSaleIds([])
     setSalesSaveState('idle')
   }
@@ -1499,8 +1748,15 @@ export default function QuotePage() {
   const deleteSelectedSale = () => {
     if (!selectedSale) return
     if (!window.confirm(`${selectedSale.clientName || '이 영업건'}을(를) 삭제할까요? 연결된 견적서는 유지됩니다.`)) return
-    persistSales(sales.filter((sale) => sale.id !== selectedSale.id))
+    const saved = persistSales(sales.filter((sale) => sale.id !== selectedSale.id))
+    if (!saved) {
+      setSalesSaveState('error')
+      return
+    }
     persistQuotes(savedQuotes.map((quote) => quote.salesId === selectedSale.id ? { ...quote, salesId: null } : quote))
+    void deleteSaleAttachmentsForSales([selectedSale.id]).catch(() => {
+      showAttachmentMessage('삭제한 영업건의 첨부파일을 정리하지 못했습니다.', 'error')
+    })
     showSalesList()
   }
 
@@ -1677,6 +1933,7 @@ export default function QuotePage() {
 
       <input ref={costFileInputRef} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importCostCatalog} />
       <input ref={salesFileInputRef} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importSalesHistory} />
+      <input ref={saleAttachmentInputRef} className="visually-hidden" type="file" multiple disabled={!salesEditMode || !selectedSaleId} aria-label="첨부할 파일 선택" onChange={handleSaleAttachmentUpload} />
 
       {activeTab === 'sales' ? (
         <main className="sales-page">
@@ -1874,7 +2131,7 @@ export default function QuotePage() {
                       onClick={(event) => { event.preventDefault(); copySelectedClientInfo() }}
                       onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); copySelectedClientInfo() } }}
                       aria-label="거래처 정보 전체 복사"
-                      title="거래처명, 대표자, 사업자번호, 세금계산서 이메일, 연락처를 복사합니다"
+                      title="거래처명, 대표자, 사업자번호, 세금계산서 이메일, 연락처, 주소를 복사합니다"
                     >
                       {clientInfoCopyState === 'copied' ? '복사됨' : clientInfoCopyState === 'error' ? '복사 실패' : '전체 복사'}
                     </a>
@@ -1885,6 +2142,7 @@ export default function QuotePage() {
                     <label className="field"><span>사업자번호</span><input value={selectedSale.businessRegistrationNumber} onChange={(event) => updateSaleField('businessRegistrationNumber', event.target.value)} placeholder="000-00-00000" autoComplete="off" /></label>
                     <label className="field sales-tax-email-field"><span>세금계산서 받을 메일주소</span><input type="email" value={selectedSale.taxInvoiceEmail} onChange={(event) => updateSaleField('taxInvoiceEmail', event.target.value)} placeholder="tax@example.com" autoComplete="email" /></label>
                     <label className="field sales-contact-field"><span>연락처</span><input type="tel" value={selectedSale.contactPhone} onChange={(event) => updateSaleField('contactPhone', event.target.value)} placeholder="010-0000-0000" autoComplete="tel" /></label>
+                    <label className="field sales-address-field"><span>주소</span><input value={selectedSale.address} onChange={(event) => updateSaleField('address', event.target.value)} placeholder="주소를 입력하세요" autoComplete="street-address" /></label>
                   </div>
                 </section>
 
@@ -2076,9 +2334,42 @@ export default function QuotePage() {
                 </div>
               </section>
 
-              <section className="form-card">
-                <h2>내부 메모</h2>
+              <section className="form-card internal-memo-card">
+                <div className="internal-memo-heading">
+                  <h2>내부 메모</h2>
+                  <div className="internal-memo-actions attachment-edit-action">
+                    <button type="button" className="btn-light" onClick={() => void generateSabangnetAttachment(selectedSale.id, { replaceExisting: true })}>{selectedSaleHasSabangnetAttachment ? '사방넷 엑셀 다시 생성' : '사방넷 엑셀 생성'}</button>
+                    <button type="button" className="btn-light" onClick={() => saleAttachmentInputRef.current?.click()}>+ 파일 첨부</button>
+                  </div>
+                </div>
                 <textarea className="internal-memo" value={selectedSale.internalMemo} onChange={(event) => updateSaleField('internalMemo', event.target.value)} placeholder="고객 협의 내용, 특이사항 등 내부에서만 볼 메모를 남기세요." rows={4} />
+                <div className="sabangnet-shipping-info">
+                  <div className="sabangnet-shipping-info-heading"><h3>사방넷 배송 정보</h3><span>비워두면 거래처명·연락처를 사용합니다.</span></div>
+                  <div className="sabangnet-shipping-fields">
+                    <label className="field"><span>수취인명 <small>(선택)</small></span><input value={selectedSale.recipientName} onChange={(event) => updateSaleField('recipientName', event.target.value)} placeholder="거래처명과 다를 때 입력" autoComplete="name" /></label>
+                    <label className="field"><span>수취인 연락처 <small>(선택)</small></span><input type="tel" value={selectedSale.recipientPhone} onChange={(event) => updateSaleField('recipientPhone', event.target.value)} placeholder="연락처와 다를 때 입력" autoComplete="tel" /></label>
+                    <label className="field sabangnet-delivery-message-field"><span>배송메시지 <small>(선택)</small></span><input value={selectedSale.deliveryMessage} onChange={(event) => updateSaleField('deliveryMessage', event.target.value)} placeholder="예: 부재 시 경비실에 맡겨주세요" /></label>
+                  </div>
+                </div>
+                <div className="sale-attachments">
+                  <div className="sale-attachments-heading"><h3>첨부파일</h3><span>엑셀을 포함한 일반 파일을 첨부하면 바로 저장됩니다.</span></div>
+                  {attachmentMessage && <p className={`attachment-message attachment-message-${attachmentMessage.tone}`} role="status">{attachmentMessage.text}</p>}
+                  {selectedSale.status === 'inProgress' && !selectedSaleHasSabangnetAttachment && selectedSaleSabangnetIssues.length > 0 && <p className="attachment-message attachment-message-error">사방넷 자동 생성 대기: {selectedSaleSabangnetIssues.join(', ')} 입력 필요</p>}
+                  {selectedSaleAttachments.length ? (
+                    <ul className="sale-attachment-list">
+                      {selectedSaleAttachments.map((attachment) => (
+                        <li key={attachment.id}>
+                          <a href={`#attachment-${attachment.id}`} onClick={(event) => { event.preventDefault(); void downloadSaleAttachment(attachment) }} title={`${attachment.name} 다운로드`}>
+                            <span className={`attachment-kind attachment-kind-${attachment.kind}`}>{attachment.kind === 'sabangnet' ? '사방넷' : '파일'}</span>
+                            <strong>{attachment.name}</strong>
+                            <small>{attachmentSizeLabel(attachment.size)}</small>
+                          </a>
+                          <button type="button" className="btn-light btn-del attachment-edit-action" onClick={() => void removeSaleAttachment(attachment)} aria-label={`${attachment.name} 삭제`}>삭제</button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="sale-attachments-empty">첨부파일이 없습니다. 진행 중으로 변경할 때 필수 정보가 채워져 있으면 사방넷 등록 양식이 자동 생성됩니다.</p>}
+                </div>
               </section>
                 </fieldset>
               </div>

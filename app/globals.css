@@ -783,6 +783,7 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-core-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px 12px; }
 .sales-core-fields > .field { grid-column: span 2; }
 .sales-tax-email-field, .sales-contact-field { grid-column: span 3 !important; }
+.sales-address-field { grid-column: 1 / -1 !important; }
 .tracking-card { display: grid; align-content: start; gap: 10px; }
 .tracking-card-header { display: block; padding-bottom: 8px; border-bottom: 1px solid #e0e9e1; }
 .tracking-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
@@ -834,6 +835,40 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .tracking-date-field > span, .tracking-amount-field > span, .tracking-memo-field > span { color: var(--text2); font-size: 11px; font-weight: 700; }
 .tracking-date-field input, .tracking-amount-field input, .tracking-memo-field input { width: 100%; min-width: 0; min-height: 34px; }
 .tracking-remove { min-height: 32px; padding: 4px 7px; font-size: 11px; }
+
+.internal-memo-card { display: grid; gap: 12px; }
+.internal-memo-heading, .sale-attachments-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.internal-memo-heading h2, .sale-attachments-heading h3 { margin: 0; }
+.internal-memo-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.internal-memo-actions .btn-light { min-height: 30px; padding: 4px 8px; font-size: 11px; }
+.internal-memo-card .internal-memo { width: 100%; min-height: 92px; resize: vertical; }
+.sabangnet-shipping-info { display: grid; gap: 8px; padding: 10px; border: 1px solid #dce7dd; border-radius: 8px; background: #fbfdfb; }
+.sabangnet-shipping-info-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sabangnet-shipping-info-heading h3 { margin: 0; font-size: 12px; letter-spacing: -0.02em; }
+.sabangnet-shipping-info-heading > span { color: var(--text3); font-size: 11px; text-align: right; }
+.sabangnet-shipping-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sabangnet-shipping-fields .field { gap: 4px; }
+.sabangnet-shipping-fields .field > span { font-size: 11px; }
+.sabangnet-shipping-fields .field > span small { color: var(--text3); font-size: 10px; font-weight: 500; }
+.sabangnet-shipping-fields input { width: 100%; min-height: 34px; }
+.sabangnet-delivery-message-field { grid-column: 1 / -1; }
+.sale-attachments { display: grid; gap: 8px; padding-top: 11px; border-top: 1px solid #e0e9e1; }
+.sale-attachments-heading h3 { font-size: 12px; letter-spacing: -0.02em; }
+.sale-attachments-heading > span { color: var(--text3); font-size: 11px; text-align: right; }
+.attachment-message { padding: 7px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; line-height: 1.45; }
+.attachment-message-success { color: #17613d; background: #eaf6ed; }
+.attachment-message-error { color: #9c332a; background: #fbeceb; }
+.sale-attachment-list { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.sale-attachment-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid #dce7dd; border-radius: 7px; background: #fbfdfb; }
+.sale-attachment-list a { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; gap: 7px; color: var(--text); text-decoration: none; }
+.sale-attachment-list a:hover strong, .sale-attachment-list a:focus-visible strong { text-decoration: underline; }
+.sale-attachment-list a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 4px; }
+.sale-attachment-list strong { overflow: hidden; min-width: 0; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sale-attachment-list small { margin-left: auto; color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.attachment-kind { flex: 0 0 auto; padding: 3px 5px; border-radius: 4px; color: var(--text2); background: #edf1ee; font-size: 10px; font-weight: 800; line-height: 1; }
+.attachment-kind-sabangnet { color: #17613d; background: #dff1e3; }
+.sale-attachment-list .btn-light { flex: 0 0 auto; min-height: 27px; padding: 3px 7px; font-size: 10px; }
+.sale-attachments-empty { color: var(--text3); font-size: 11px; line-height: 1.5; }
 
 .sales-edit-fields > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .sales-readonly :is(input, textarea, select) {
@@ -896,7 +931,8 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-readonly .form-card-actions,
 .sales-readonly .sales-item-header > button,
 .sales-readonly .tracking-section-heading > button,
-.sales-readonly .tracking-remove { display: none; }
+.sales-readonly .tracking-remove,
+.sales-readonly .attachment-edit-action { display: none; }
 .sales-readonly .catalog-search-field { z-index: auto; }
 
 .items-card { padding-bottom: 0; }
@@ -1046,7 +1082,9 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 @media (max-width: 520px) {
   .sales-core-fields { grid-template-columns: 1fr; }
   .sales-core-fields > .field { grid-column: auto; }
-  .sales-tax-email-field, .sales-contact-field { grid-column: auto !important; }
+  .sales-tax-email-field, .sales-contact-field, .sales-address-field { grid-column: auto !important; }
+  .sabangnet-shipping-fields { grid-template-columns: 1fr; }
+  .sabangnet-delivery-message-field { grid-column: auto; }
   .sales-monthly-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tracking-row-top { grid-template-columns: minmax(0, 1fr) auto; }
   .tracking-status-buttons { grid-column: 1 / -1; grid-row: 2; }
