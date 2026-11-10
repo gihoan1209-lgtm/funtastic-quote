@@ -23,17 +23,19 @@ const sale = {
 }
 
 test('SabangNet rows use the supplied nine-column registration order', () => {
-  const rows = sabangnetRowsFromSale(sale)
+  const generatedAt = new Date(2026, 10, 10, 9)
+  const rows = sabangnetRowsFromSale(sale, generatedAt)
 
   assert.deepEqual(SABANGNET_HEADERS, ['주문번호', '수취인명', '주소', '전화번호', '배송메세지', '상품명', '옵션', '수량', '상품코드(상품명)'])
-  assert.equal(sabangnetOrderNumberForSale(sale), '20261103-cdefgh')
+  assert.equal(sabangnetOrderNumberForSale(sale, generatedAt), '20261110-bob1')
+  assert.equal(sabangnetOrderNumberForSale({ ...sale, quoteDate: '2026-01-01', sabangnetOrderNumber: 'legacy-order' }, generatedAt), '20261110-bob1')
   assert.deepEqual(rows, [
     {
-      주문번호: '20261103-cdefgh', 수취인명: '한국특수단열', 주소: '경기도 광주시 직동로8', 전화번호: '010-0123-4567', 배송메세지: '',
-      상품명: '미누스 보냉가방', 옵션: '베이지', 수량: 12, '상품코드(상품명)': '112260-0001',
+      주문번호: '20261110-bob1', 수취인명: '한국특수단열', 주소: '경기도 광주시 직동로8', 전화번호: '010-0123-4567', 배송메세지: '',
+      상품명: '미누스 보냉가방', 옵션: '베이지', 수량: 12, '상품코드(상품명)': '미누스 보냉가방',
     },
     {
-      주문번호: '20261103-cdefgh', 수취인명: '한국특수단열', 주소: '경기도 광주시 직동로8', 전화번호: '010-0123-4567', 배송메세지: '',
+      주문번호: '20261110-bob1', 수취인명: '한국특수단열', 주소: '경기도 광주시 직동로8', 전화번호: '010-0123-4567', 배송메세지: '',
       상품명: '보조 상품', 옵션: '', 수량: 3, '상품코드(상품명)': '보조 상품',
     },
   ])
@@ -53,12 +55,15 @@ test('SabangNet falls back to client details when optional recipient values cont
 })
 
 test('SabangNet workbook keeps phone text and quantity numeric in the template-shaped Sheet1', () => {
-  const workbook = createSabangnetWorkbook(sabangnetRowsFromSale(sale))
+  const workbook = createSabangnetWorkbook(sabangnetRowsFromSale(sale, '2026-11-10'))
   const files = unzipSync(workbook)
   const sheet = strFromU8(files['xl/worksheets/sheet1.xml'])
 
   assert.match(strFromU8(files['xl/workbook.xml']), /sheet name="Sheet1"/)
   assert.match(sheet, /r="D2"[^>]*><is><t xml:space="preserve">010-0123-4567<\/t><\/is><\/c>/)
+  assert.match(sheet, /r="A2"[^>]*><is><t xml:space="preserve">20261110-bob1<\/t><\/is><\/c>/)
+  assert.match(sheet, /r="F2"[^>]*><is><t xml:space="preserve">미누스 보냉가방<\/t><\/is><\/c>/)
+  assert.match(sheet, /r="I2"[^>]*><is><t xml:space="preserve">미누스 보냉가방<\/t><\/is><\/c>/)
   assert.match(sheet, /r="H2" s="2"><v>12<\/v>/)
   assert.doesNotMatch(sheet, /autoFilter/)
 })

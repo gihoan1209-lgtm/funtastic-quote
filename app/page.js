@@ -1186,9 +1186,10 @@ export default function QuotePage() {
 
     sabangnetGenerationRef.current.add(generationKey)
     try {
-      const orderNumber = sabangnetOrderNumberForSale(sale)
+      const generatedAt = new Date()
+      const orderNumber = sabangnetOrderNumberForSale(sale, generatedAt)
       const safeOrderNumber = orderNumber.replace(/[\\/:*?"<>|]/g, '_')
-      const workbook = createSabangnetWorkbook(sabangnetRowsFromSale(sale))
+      const workbook = createSabangnetWorkbook(sabangnetRowsFromSale(sale, generatedAt))
       const blob = new Blob([workbook], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
