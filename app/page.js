@@ -2002,14 +2002,14 @@ export default function QuotePage() {
                   {hasSalesFilters && <button type="button" className="btn-light sales-filter-reset" onClick={resetSalesFilters}>초기화</button>}
                   <SalesDownloadMenu allCount={sales.length} selectedCount={selectedSales.length} onDownload={downloadSalesList} />
                 </div>
-                {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 견적 매출`}>
+                {salesDetailedSearchOpen && <section id="sales-monthly-summary" className="sales-monthly-summary" aria-label={`${salesQuoteYear}년 월별 매출 요약`}>
                   <div className="sales-monthly-summary-head">
                     <div className="sales-monthly-title">
                       <label className="sales-monthly-year-picker"><span>연도</span><select value={salesQuoteYear} onChange={(event) => { setSalesQuoteYear(event.target.value); setSalesQuoteMonth(''); setSalesShowAllPeriods(false) }}>{salesQuoteYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
-                      <span>월별 견적 매출 · 견적일 · 견적합계 기준{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span>
+                      <span>월별 매출 · 견적일 기준 · 진행 중·완료만 반영{salesSearch.trim() || salesStatusFilter !== 'all' ? ' · 검색·상태 조건 반영' : ''}</span>
                     </div>
                     <div className="sales-monthly-actions">
-                      <strong className="sales-monthly-year-total">연간 합계 {money(monthlyQuoteSalesTotal)}</strong>
+                      <strong className="sales-monthly-year-total">연간 총매출 {money(monthlyQuoteSalesTotal)}</strong>
                       {salesQuoteMonth && <button type="button" className="btn-light sales-monthly-reset" onClick={() => { setSalesQuoteMonth(''); setSalesShowAllPeriods(false) }}>선택 연도 전체</button>}
                     </div>
                   </div>
@@ -2023,7 +2023,12 @@ export default function QuotePage() {
                         onClick={() => { setSalesQuoteMonth(month.month); setSalesShowAllPeriods(false) }}
                         title={`${salesQuoteYear}년 ${month.label} 견적 목록 보기`}
                       >
-                        <span>{month.label}</span><strong>{money(month.totalGross)}</strong><small>{month.saleCount}건</small>
+                        <div className="sales-monthly-summary-item-head"><span>{month.label}</span><strong>{money(month.totalGross)}</strong></div>
+                        <div className="sales-monthly-summary-metrics">
+                          <span><small>총원가</small><strong>{money(month.totalCost)}</strong></span>
+                          <span><small>총순이익</small><strong className={month.totalProfit != null && month.totalProfit < 0 ? 'amount-negative' : ''}>{money(month.totalProfit)}</strong></span>
+                          <span><small>순이익률</small><strong className={month.totalProfitRate != null && month.totalProfitRate < 0 ? 'amount-negative' : ''}>{percent(month.totalProfitRate)}</strong></span>
+                        </div>
                       </button>
                     ))}
                   </div>

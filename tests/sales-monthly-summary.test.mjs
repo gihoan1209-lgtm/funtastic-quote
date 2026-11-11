@@ -9,8 +9,9 @@ import {
   salesForQuotePeriod,
 } from '../lib/sales-monthly-summary.mjs'
 
-const sale = (quoteDate, price, qty = 1) => ({
+const sale = (quoteDate, price, qty = 1, status = 'inProgress') => ({
   quoteDate,
+  status,
   items: [{ price, qty, cost: 0, wholesalePrice: price, vatIncluded: true }],
   shippingCost: 0,
 })
@@ -22,27 +23,29 @@ test('quote date helpers favor quoteDate and retain legacy sale date fallback', 
   assert.equal(quoteMonthForList({ quoteDate: 'not-a-date' }), '')
 })
 
-test('monthly quote sales are grouped by quote date and sum quote totals', () => {
+test('monthly quote sales use quote date and include only in-progress or completed sales', () => {
   const sales = [
     sale('2026-01-03', 1000),
-    sale('2026-01-28', 2000),
-    sale('2026-02-05', 500, 2),
+    sale('2026-01-28', 2000, 1, 'completed'),
+    sale('2026-01-30', 9000, 1, 'pending'),
+    sale('2026-02-05', 500, 2, 'completed'),
+    sale('2026-02-07', 7000, 1, 'blocked'),
     sale('2025-01-03', 9000),
     sale('2026-03-03', '', 1),
   ]
 
   const monthly = calculateMonthlyQuoteSales(sales, '2026')
   assert.equal(monthly.length, 12)
-  assert.deepEqual(monthly[0], { month: '01', label: '1월', saleCount: 2, totalGross: 3000 })
-  assert.deepEqual(monthly[1], { month: '02', label: '2월', saleCount: 1, totalGross: 1000 })
-  assert.deepEqual(monthly[2], { month: '03', label: '3월', saleCount: 1, totalGross: 0 })
+  assert.deepEqual(monthly[0], { month: '01', label: '1월', totalGross: 3000, totalCost: 0, totalProfit: 2727, totalProfitRate: 0.909 })
+  assert.deepEqual(monthly[1], { month: '02', label: '2월', totalGross: 1000, totalCost: 0, totalProfit: 909, totalProfitRate: 0.909 })
+  assert.deepEqual(monthly[2], { month: '03', label: '3월', totalGross: 0, totalCost: 0, totalProfit: null, totalProfitRate: null })
   assert.equal(monthly[11].totalGross, 0)
 })
 
 test('available quote years include records and the supplied current year', () => {
   const years = quoteYearsForSales([
     sale('2025-12-31', 1),
-    sale('2027-01-01', 1),
+    sale('2027-01-01', 1, 1, 'pending'),
     sale('bad-date', 1),
   ], '2026')
 
