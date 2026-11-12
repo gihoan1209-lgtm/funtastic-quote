@@ -2052,7 +2052,7 @@ export default function QuotePage() {
                           const paymentStatuses = trackingStatusItems(sale.payments, 'payment')
                           const isSelected = selectedSaleIds.includes(sale.id)
                           return (
-                            <tr key={sale.id} onClick={() => openSale(sale.id)}>
+                            <tr key={sale.id} className={saleStatus === 'completed' ? 'sales-row-completed' : ''} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(quoteDateForList(sale))}</td>
                               <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 전체 상태 변경`} title="영업 상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>

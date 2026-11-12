@@ -576,6 +576,8 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-table td { padding: 15px 14px; border-bottom: 1px solid #ecefea; color: var(--text2); text-align: center; }
 .sales-table tbody tr { cursor: pointer; }
 .sales-table tbody tr:hover td { background: #f7faf7; }
+.sales-table tbody tr.sales-row-completed td { background: #f1f8f3; }
+.sales-table tbody tr.sales-row-completed:hover td { background: #e8f4eb; }
 .sales-table tbody tr:last-child td { border-bottom: 0; }
 .sales-select-cell { width: 46px; text-align: center !important; }
 .sales-select-cell input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--green); vertical-align: middle; }
