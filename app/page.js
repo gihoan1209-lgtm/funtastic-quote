@@ -267,7 +267,7 @@ const SALE_STATUS = {
   pending: { label: '진행 전', className: 'status-pending' },
   inProgress: { label: '진행 중', className: 'status-in-progress' },
   blocked: { label: '진행 불가', className: 'status-blocked' },
-  completed: { label: '완료', className: 'status-completed' },
+  completed: { label: '전체 완료', className: 'status-sale-completed' },
 }
 
 const SalesStatusPicker = ({ value, onChange }) => {
@@ -357,8 +357,8 @@ const SalesStatusPicker = ({ value, onChange }) => {
       <button
         ref={triggerRef}
         type="button"
-        className="sales-status-trigger"
-        aria-label="영업 상태"
+        className={`sales-status-trigger${value === 'completed' ? ' status-sale-completed' : ''}`}
+        aria-label="영업 전체 상태"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => (isOpen ? closeMenu() : openMenu())}
@@ -370,7 +370,7 @@ const SalesStatusPicker = ({ value, onChange }) => {
         </svg>
       </button>
       {isOpen && (
-        <div className="sales-status-menu" role="listbox" aria-label="영업 상태">
+        <div className="sales-status-menu" role="listbox" aria-label="영업 전체 상태">
           {statuses.map(([status, details], index) => (
             <button
               key={status}
@@ -2038,7 +2038,7 @@ export default function QuotePage() {
                 {filteredSales.length ? (
                   <div className="sales-table-wrap">
                     <table className="sales-table">
-                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>상태</th><th>출고</th><th>입금</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>총매출</th><th>총원가</th><th>총순이익</th><th>순이익률</th></tr></thead>
+                      <thead><tr><th className="sales-select-cell"><input ref={selectAllSalesRef} type="checkbox" checked={allFilteredSalesSelected} onChange={toggleAllFilteredSales} aria-label="현재 목록 전체 선택" disabled={!filteredSales.length} /></th><th>견적일</th><th>영업 상태</th><th>출고 현황</th><th>입금 현황</th><th>거래처</th><th>대표 품목</th><th>품목 수</th><th>총매출</th><th>총원가</th><th>총순이익</th><th>순이익률</th></tr></thead>
                       <tbody>
                         {filteredSales.map((sale) => {
                           const quoteItems = quoteItemsFromSale(sale)
@@ -2055,7 +2055,7 @@ export default function QuotePage() {
                             <tr key={sale.id} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(quoteDateForList(sale))}</td>
-                              <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 상태 변경`} title="상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>
+                              <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 전체 상태 변경`} title="영업 상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>
                               <td>
                                 <div className="tracking-status-summary">
                                   {shipmentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : (

@@ -582,7 +582,7 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-client { color: var(--text) !important; font-weight: 700; }
 .amount { color: var(--text) !important; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 .sales-list-status-select {
-  min-width: 92px;
+  min-width: 102px;
   min-height: 30px;
   padding: 4px 7px;
   border: 0;
@@ -609,14 +609,19 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .status-pending { color: #7a5c15; background: #fff4d7; }
 .status-in-progress { color: #176287; background: #e8f5fb; }
 .status-blocked { color: #9c332a; background: #fbeceb; }
-.status-completed { color: #17613d; background: #eaf6ed; }
+.sales-list-status-select.status-sale-completed {
+  color: #fff;
+  border: 1px solid #0e5a36;
+  background: #176b42;
+  box-shadow: 0 1px 2px rgba(14, 90, 54, 0.2);
+}
 .tracking-status-summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-width: 96px; }
 .tracking-status-item { display: grid; justify-items: center; gap: 3px; }
 .tracking-status-summary .status-badge { min-height: 22px; padding: 3px 6px; font-size: 10px; }
 .tracking-status-date { width: 96px; min-height: 22px; padding: 1px 3px; border: 0; border-bottom: 1px solid #d7e1d9; border-radius: 0; background: transparent; color: var(--text2); font-family: inherit; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; cursor: pointer; }
 .tracking-status-date:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .status-tracking-before { color: #5c665e; background: #edf0ed; }
-.status-tracking-completed { color: #17613d; background: #eaf6ed; }
+.status-tracking-completed { color: #27744c; border: 1px solid #cfe7d6; background: #f1f8f3; }
 .status-tracking-more { color: var(--text2); background: var(--surface-muted); }
 .status-badge-action { border: 0; font-family: inherit; cursor: pointer; }
 .status-badge-action:hover { filter: brightness(0.96); }
@@ -689,6 +694,14 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   white-space: nowrap;
 }
 .sales-status-trigger:hover { background: #f8fbf8; }
+.sales-status-trigger.status-sale-completed {
+  color: #fff;
+  border-color: #0e5a36;
+  background: #176b42;
+  box-shadow: 0 1px 2px rgba(14, 90, 54, 0.2);
+}
+.sales-status-trigger.status-sale-completed:hover { background: #105a35; }
+.sales-status-trigger.status-sale-completed .sales-status-caret { color: #fff; }
 .sales-status-trigger:focus-visible, .sales-status-trigger[aria-expanded="true"] {
   border-color: var(--green);
   outline: 0;
