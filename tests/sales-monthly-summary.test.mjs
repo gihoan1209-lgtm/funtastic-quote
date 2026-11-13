@@ -7,6 +7,7 @@ import {
   quoteMonthForList,
   quoteYearsForSales,
   salesForQuotePeriod,
+  sortSalesForList,
 } from '../lib/sales-monthly-summary.mjs'
 
 const sale = (quoteDate, price, qty = 1, status = 'inProgress') => ({
@@ -61,4 +62,23 @@ test('quote period list limits records to the selected year and optional month',
   assert.deepEqual(salesForQuotePeriod([january, october, priorYear, legacyDate], '2026', '10'), [october, legacyDate])
   assert.deepEqual(salesForQuotePeriod([january, october, priorYear], '2026'), [january, october])
   assert.deepEqual(salesForQuotePeriod([january], '2026', '13'), [])
+})
+
+test('sales list puts pending sales first and then uses the newest quote date', () => {
+  const sales = [
+    { ...sale('2026-11-08', 100, 1, 'completed'), id: 'completed' },
+    { ...sale('2026-11-03', 100, 1, 'pending'), id: 'pending-old' },
+    { ...sale('2026-11-10', 100, 1, 'inProgress'), id: 'in-progress' },
+    { ...sale('2026-11-12', 100, 1, 'pending'), id: 'pending-new' },
+    { ...sale('2026-11-11', 100), id: 'legacy-pending', status: undefined },
+  ]
+
+  assert.deepEqual(sortSalesForList(sales).map((sale) => sale.id), [
+    'pending-new',
+    'legacy-pending',
+    'pending-old',
+    'in-progress',
+    'completed',
+  ])
+  assert.deepEqual(sales.map((sale) => sale.id), ['completed', 'pending-old', 'in-progress', 'pending-new', 'legacy-pending'])
 })

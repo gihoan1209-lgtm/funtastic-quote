@@ -14,6 +14,7 @@ import {
   quoteDateForList,
   quoteYearsForSales,
   salesForQuotePeriod,
+  sortSalesForList,
 } from '../lib/sales-monthly-summary.mjs'
 import { withTrackingSaleStatus } from '../lib/sales-tracking-status.mjs'
 import {
@@ -679,8 +680,7 @@ export default function QuotePage() {
     const periodSales = salesShowAllPeriods
       ? salesMatchingSearchAndStatus
       : salesForQuotePeriod(salesMatchingSearchAndStatus, salesQuoteYear, salesQuoteMonth)
-    return periodSales
-      .sort((left, right) => quoteDateForList(right).localeCompare(quoteDateForList(left)))
+    return sortSalesForList(periodSales)
   }, [salesMatchingSearchAndStatus, salesQuoteMonth, salesQuoteYear, salesShowAllPeriods])
 
   const salesQuoteYears = useMemo(

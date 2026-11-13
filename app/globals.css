@@ -623,7 +623,7 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .tracking-status-date { width: 96px; min-height: 22px; padding: 1px 3px; border: 0; border-bottom: 1px solid #d7e1d9; border-radius: 0; background: transparent; color: var(--text2); font-family: inherit; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; cursor: pointer; }
 .tracking-status-date:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .status-tracking-before { color: #5c665e; background: #edf0ed; }
-.status-tracking-completed { color: #27744c; border: 1px solid #cfe7d6; background: #f1f8f3; }
+.status-tracking-completed { color: #5f4aa1; border: 1px solid #ded4fb; background: #f4f1ff; }
 .status-tracking-more { color: var(--text2); background: var(--surface-muted); }
 .status-badge-action { border: 0; font-family: inherit; cursor: pointer; }
 .status-badge-action:hover { filter: brightness(0.96); }
@@ -848,7 +848,7 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .tracking-status-button:last-child { border-right: 0; }
 .tracking-status-before, .tracking-status-completed { color: var(--text2); background: #fff; }
 .tracking-status-before.is-active { color: #754b00; background: #ffe4a0; box-shadow: inset 0 0 0 1px #e5ae36; }
-.tracking-status-completed.is-active { color: #fff; background: #23744a; box-shadow: inset 0 0 0 1px #17613d; }
+.tracking-status-completed.is-active { color: #fff; background: #6953ad; box-shadow: inset 0 0 0 1px #503b91; }
 .tracking-status-button:hover { filter: brightness(0.97); }
 .tracking-date-field, .tracking-amount-field, .tracking-memo-field { display: grid; gap: 4px; min-width: 0; }
 .tracking-date-field > span, .tracking-amount-field > span, .tracking-memo-field > span { color: var(--text2); font-size: 11px; font-weight: 700; }
