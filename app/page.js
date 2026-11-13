@@ -194,7 +194,8 @@ const normalizedTrackingRows = (rows, createRow) => (
 
 const trackingStatusItems = (rows, type) => {
   const isShipment = type === 'shipment'
-  const beforeLabel = isShipment ? '출고전' : '입금전'
+  const beforeLabel = isShipment ? '출고대기' : '입금 대기'
+  const beforeClassName = isShipment ? 'status-tracking-shipment-waiting' : 'status-tracking-payment-waiting'
   const completedLabel = isShipment ? '출고완료' : '입금완료'
   const sourceRows = Array.isArray(rows) && rows.length ? rows : [{ id: 1, status: 'before', date: '' }]
   const items = sourceRows.slice(0, 2).map((row, index) => {
@@ -205,7 +206,7 @@ const trackingStatusItems = (rows, type) => {
       status: completed ? 'completed' : 'before',
       date: String(row?.date ?? ''),
       label: completed ? completedLabel : beforeLabel,
-      className: completed ? 'status-tracking-completed' : 'status-tracking-before',
+      className: completed ? 'status-tracking-completed' : beforeClassName,
     }
   })
   if (sourceRows.length > 2) items.push({ id: 'more', label: `+${sourceRows.length - 2}`, className: 'status-tracking-more', isMore: true })
@@ -2052,7 +2053,7 @@ export default function QuotePage() {
                           const paymentStatuses = trackingStatusItems(sale.payments, 'payment')
                           const isSelected = selectedSaleIds.includes(sale.id)
                           return (
-                            <tr key={sale.id} className={saleStatus === 'completed' ? 'sales-row-completed' : ''} onClick={() => openSale(sale.id)}>
+                            <tr key={sale.id} className={saleStatus === 'completed' ? 'sales-row-completed' : saleStatus === 'pending' ? 'sales-row-pending' : ''} onClick={() => openSale(sale.id)}>
                               <td className="sales-select-cell"><input type="checkbox" checked={isSelected} onClick={(event) => event.stopPropagation()} onChange={() => toggleSaleSelection(sale.id)} aria-label={`${sale.clientName || '거래처 미입력'} 선택`} /></td>
                               <td>{formatShortDate(quoteDateForList(sale))}</td>
                               <td><select className={`sales-list-status-select ${status.className}`} value={saleStatus} onClick={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); updateSaleStatusFromList(sale.id, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} 영업 전체 상태 변경`} title="영업 상태 변경 시 바로 저장됩니다">{Object.entries(SALE_STATUS).map(([value, details]) => <option key={value} value={value}>{details.label}</option>)}</select></td>
@@ -2060,7 +2061,7 @@ export default function QuotePage() {
                                 <div className="tracking-status-summary">
                                   {shipmentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : (
                                     <div className="tracking-status-item" key={trackingStatus.id}>
-                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '출고전' : '출고완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'shipment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
+                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={trackingStatus.status === 'completed' ? '클릭하여 출고대기로 변경' : '클릭하여 출고완료로 변경'} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'shipment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
                                       <input type="date" className="tracking-status-date" value={trackingStatus.date} onClick={(event) => { event.stopPropagation(); openNativeDatePicker(event) }} onChange={(event) => { event.stopPropagation(); updateTrackingDateFromList(sale.id, 'shipment', trackingStatus.rowId, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 출고일`} title="출고일 변경 시 바로 저장됩니다" />
                                     </div>
                                   ))}
@@ -2070,7 +2071,7 @@ export default function QuotePage() {
                                 <div className="tracking-status-summary">
                                   {paymentStatuses.map((trackingStatus) => trackingStatus.isMore ? <span className={`status-badge ${trackingStatus.className}`} key={trackingStatus.id}>{trackingStatus.label}</span> : (
                                     <div className="tracking-status-item" key={trackingStatus.id}>
-                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={`클릭하여 ${trackingStatus.status === 'completed' ? '입금전' : '입금완료'}으로 변경`} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'payment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
+                                      <button type="button" className={`status-badge status-badge-action ${trackingStatus.className}`} aria-pressed={trackingStatus.status === 'completed'} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 상태 변경`} title={trackingStatus.status === 'completed' ? '클릭하여 입금 대기로 변경' : '클릭하여 입금완료로 변경'} onClick={(event) => { event.stopPropagation(); toggleTrackingStatusFromList(sale.id, 'payment', trackingStatus.rowId) }}>{trackingStatus.label}</button>
                                       <input type="date" className="tracking-status-date" value={trackingStatus.date} onClick={(event) => { event.stopPropagation(); openNativeDatePicker(event) }} onChange={(event) => { event.stopPropagation(); updateTrackingDateFromList(sale.id, 'payment', trackingStatus.rowId, event.target.value) }} aria-label={`${sale.clientName || '거래처 미입력'} ${trackingStatus.label} 입금일`} title="입금일 변경 시 바로 저장됩니다" />
                                     </div>
                                   ))}
@@ -2165,7 +2166,7 @@ export default function QuotePage() {
                           <div className="tracking-row tracking-shipment-row" key={shipment.id}>
                             <div className="tracking-row-top">
                               <div className="tracking-status-buttons" role="group" aria-label={`출고 ${index + 1} 상태`}>
-                                <button type="button" aria-pressed={shipment.status === 'before'} className={`tracking-status-button tracking-status-before ${shipment.status === 'before' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고전</button>
+                                <button type="button" aria-pressed={shipment.status === 'before'} className={`tracking-status-button tracking-status-shipment-waiting ${shipment.status === 'before' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'before')}>출고대기</button>
                                 <button type="button" aria-pressed={shipment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${shipment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updateShipment(shipment.id, 'status', 'completed')}>출고완료</button>
                               </div>
                               <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removeShipment(shipment.id)} disabled={selectedSale.shipments.length === 1}>삭제</button>
@@ -2186,7 +2187,7 @@ export default function QuotePage() {
                           <div className="tracking-row tracking-payment-row" key={payment.id}>
                             <div className="tracking-row-top">
                               <div className="tracking-status-buttons" role="group" aria-label={`입금 ${index + 1} 상태`}>
-                                <button type="button" aria-pressed={payment.status === 'before'} className={`tracking-status-button tracking-status-before ${payment.status === 'before' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금전</button>
+                                <button type="button" aria-pressed={payment.status === 'before'} className={`tracking-status-button tracking-status-payment-waiting ${payment.status === 'before' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'before')}>입금 대기</button>
                                 <button type="button" aria-pressed={payment.status === 'completed'} className={`tracking-status-button tracking-status-completed ${payment.status === 'completed' ? 'is-active' : ''}`} onClick={() => updatePayment(payment.id, 'status', 'completed')}>입금완료</button>
                               </div>
                               <button type="button" className="btn-light btn-del tracking-remove" onClick={() => removePayment(payment.id)} disabled={selectedSale.payments.length === 1}>삭제</button>

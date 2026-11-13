@@ -578,6 +578,8 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .sales-table tbody tr:hover td { background: #f7faf7; }
 .sales-table tbody tr.sales-row-completed td { background: #f1f8f3; }
 .sales-table tbody tr.sales-row-completed:hover td { background: #e8f4eb; }
+.sales-table tbody tr.sales-row-pending td { background: #f2f4f6; }
+.sales-table tbody tr.sales-row-pending:hover td { background: #e9edf0; }
 .sales-table tbody tr:last-child td { border-bottom: 0; }
 .sales-select-cell { width: 46px; text-align: center !important; }
 .sales-select-cell input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--green); vertical-align: middle; }
@@ -608,7 +610,8 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   font-weight: 700;
   white-space: nowrap;
 }
-.status-pending { color: #7a5c15; background: #fff4d7; }
+.status-pending { color: #fff; background: #4b5563; }
+.sales-list-status-select.status-pending { border: 1px solid #38414b; box-shadow: 0 1px 2px rgba(38, 46, 56, 0.2); }
 .status-in-progress { color: #176287; background: #e8f5fb; }
 .status-blocked { color: #9c332a; background: #fbeceb; }
 .sales-list-status-select.status-sale-completed {
@@ -622,7 +625,8 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
 .tracking-status-summary .status-badge { min-height: 22px; padding: 3px 6px; font-size: 10px; }
 .tracking-status-date { width: 96px; min-height: 22px; padding: 1px 3px; border: 0; border-bottom: 1px solid #d7e1d9; border-radius: 0; background: transparent; color: var(--text2); font-family: inherit; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; cursor: pointer; }
 .tracking-status-date:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.status-tracking-before { color: #5c665e; background: #edf0ed; }
+.status-tracking-shipment-waiting { color: #795116; border: 1px solid #efd8a1; background: #fff6df; }
+.status-tracking-payment-waiting { color: #a13e35; border: 1px solid #f0c4bd; background: #fff0ee; }
 .status-tracking-completed { color: #5f4aa1; border: 1px solid #ded4fb; background: #f4f1ff; }
 .status-tracking-more { color: var(--text2); background: var(--surface-muted); }
 .status-badge-action { border: 0; font-family: inherit; cursor: pointer; }
@@ -846,8 +850,9 @@ button.sales-workflow-month:focus-visible { border-color: var(--green); outline:
   white-space: nowrap;
 }
 .tracking-status-button:last-child { border-right: 0; }
-.tracking-status-before, .tracking-status-completed { color: var(--text2); background: #fff; }
-.tracking-status-before.is-active { color: #754b00; background: #ffe4a0; box-shadow: inset 0 0 0 1px #e5ae36; }
+.tracking-status-shipment-waiting, .tracking-status-payment-waiting, .tracking-status-completed { color: var(--text2); background: #fff; }
+.tracking-status-shipment-waiting.is-active { color: #fff; background: #9a611b; box-shadow: inset 0 0 0 1px #7e4910; }
+.tracking-status-payment-waiting.is-active { color: #fff; background: #b9463c; box-shadow: inset 0 0 0 1px #96362d; }
 .tracking-status-completed.is-active { color: #fff; background: #6953ad; box-shadow: inset 0 0 0 1px #503b91; }
 .tracking-status-button:hover { filter: brightness(0.97); }
 .tracking-date-field, .tracking-amount-field, .tracking-memo-field { display: grid; gap: 4px; min-width: 0; }
